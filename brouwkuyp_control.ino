@@ -1,5 +1,7 @@
 /**
  * Brouwkuyp Arduino Brew Software
+ *
+ * @author Evert Harmeling <evertharmeling@gmail.com>
  */
 
 #include <SPI.h>
@@ -47,8 +49,8 @@ byte ip[]     = { 192, 168, 2, 150 };
 #define HYSTERESE               0.5   // degrees celsius
 #define PRECISION               2
 #define FLOAT_LENGTH            6
-#define MAX_HLT_TEMPERATURE     80
-#define HLT_MLT_HEATUP_DIFF     15
+#define MAX_HLT_TEMPERATURE     80    // degrees celsius
+#define HLT_MLT_HEATUP_DIFF     15    // degrees celsius
 
 void callback(char* topic, byte* payload, unsigned int length);
 
@@ -69,7 +71,8 @@ boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
 
 // Callback function
-void callback(char* topic, byte* payload, unsigned int length) {
+void callback(char* topic, byte* payload, unsigned int length) 
+{
     char value[length + 1];
     snprintf(value, length + 1, "%s", payload);
   
@@ -121,7 +124,8 @@ void loop()
  *
  *  Possible optimization for HLT temp, knowing the max MLT temp (last step), so HLT does not have to get warmer
  */
-void handleRecipe() {
+void handleRecipe() 
+{
     // make sure we have a set temp for the MLT
     if (setTempMLT != NULL) {
         setTempHLT = setTempMLT + HLT_MLT_HEATUP_DIFF;
@@ -144,8 +148,8 @@ void handleRecipe() {
 /**
   * Publishes all the data
   */
-void publishData() {
-    
+void publishData() 
+{    
     publishFloat(TOPIC_MASHER_CURR_TEMP, tempMLT);
     publishFloat(TOPIC_MASHER_MLT_CURR_TEMP, tempMLT);
     publishFloat(TOPIC_MASHER_HLT_CURR_TEMP, tempHLT);
@@ -170,7 +174,8 @@ void publishData() {
 /**
  *  Connects to MQTT server and subscribes to topic
  */
-boolean connectAndSubscribe() {
+boolean connectAndSubscribe() 
+{
     if (!client.connected()) {
         if (client.connect(ARDUINO_CLIENT)) {
             Serial.println("Connected!");
@@ -212,7 +217,8 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
  *  @param char* topic
  *  @param char* value
  */
-void publishString(char* topic, char* value) {
+void publishString(char* topic, char* value) 
+{
   if (client.connected()) {
 //      Serial.print("Publishing: ");
 //      Serial.print(topic);
@@ -224,7 +230,8 @@ void publishString(char* topic, char* value) {
   }
 }
 
-void publishFloat(char* topic, float value) {
+void publishFloat(char* topic, float value) 
+{
     // only publish data which is set
     if (value != NULL) {
         char *charTemp = NULL;
@@ -238,7 +245,8 @@ void publishFloat(char* topic, float value) {
 /**
  *  Reads the temperature of the sensors, and stores these in `temp` variable and `sensor` variable
  */
-boolean readTemperatures() {
+boolean readTemperatures() 
+{
     byte i;
     byte data[12];
     byte addr[8];
@@ -286,8 +294,8 @@ boolean readTemperatures() {
         tempBLT = temp;
     } else if (sensor == SENSOR_EXT) {
         tempEXT = temp;
-        tempMLT = temp; // test perposes because of single probe
-        tempBLT = temp; // test perposes because of single probe
+        tempMLT = temp; // test purposes because of single probe
+        tempBLT = temp; // test purposes because of single probe
     }
     
     return true;
@@ -299,7 +307,8 @@ boolean readTemperatures() {
  *  @param float temp
  *  @param char **charTemp
  */
-void convertTemperature(float temp, char **charTemp) {
+void convertTemperature(float temp, char **charTemp) 
+{
    *charTemp = (char *)malloc(sizeof(char) * (FLOAT_LENGTH + 1));
    dtostrf(temp, FLOAT_LENGTH, PRECISION, *charTemp);
 }
@@ -310,7 +319,8 @@ void convertTemperature(float temp, char **charTemp) {
  *  @param int relais     The pin of the relais
  *  @param boolean state  true / false
  */
-void switchRelais(int relais, boolean state) {
+void switchRelais(int relais, boolean state) 
+{
     if (state) {
 //        Serial.println("Set relais " + String(relais) + " ON");
         digitalWrite(relais, LOW);
