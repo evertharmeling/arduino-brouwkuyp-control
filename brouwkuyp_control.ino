@@ -1,7 +1,11 @@
 /**
  * Brouwkuyp Arduino Brew Software
- *
  * @author Evert Harmeling <evertharmeling@gmail.com>
+ */
+ 
+/**
+ * @todo
+ * - heat up MLT, when we need to reach a higher temp (begin of new set temp (+/- 5oC diff)) only when the pump is on
  */
 
 #include <SPI.h>
@@ -13,7 +17,8 @@
 
 // Network settings
 byte mac[]    = {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-byte server[] = { 192, 168, 2, 132 };
+//byte server[] = { 192, 168, 2, 132 };
+byte server[] = { 192, 168, 2, 114 };
 byte ip[]     = { 192, 168, 2, 150 };
 
 // Temperature probe addresses
@@ -26,7 +31,7 @@ byte ip[]     = { 192, 168, 2, 150 };
 
 // Subscribe topics
 #define TOPIC_MASHER_SET_TEMP "brewery/brewhouse01/masher/set_temp"
-//#define TOPIC_PUMP_SET_STATE  "brewery/brewhouse01/pump/set_state"
+#define TOPIC_PUMP_SET_STATE  "brewery/brewhouse01/pump/set_state"
 
 // Publish topics
 #define TOPIC_MASHER_CURR_TEMP     "brewery/brewhouse01/masher/curr_temp"
@@ -36,6 +41,9 @@ byte ip[]     = { 192, 168, 2, 150 };
 #define TOPIC_EXT_CURR_TEMP        "brewery/brewhouse01/ext/curr_temp"
 #define TOPIC_PUMP_CURR_STATE      "brewery/brewhouse01/pump/curr_state"
 
+#define PUMP_STATE_ON              "on"
+#define PUMP_STATE_OFF             "off"
+
 // Declaration pins
 #define PIN_SENSOR_TEMPERATURE  2
 #define PIN_RELAIS_PUMP         5
@@ -43,14 +51,15 @@ byte ip[]     = { 192, 168, 2, 150 };
 #define PIN_RELAIS_TWO          7
 #define PIN_RELAIS_THREE        8
 #define PIN_RELAIS_FOUR         9
+#define PIN_RELAIS_FIVE         10
 
 // Config settings
 #define LOOP_INTERVAL           1000  // milliseconds
 #define HYSTERESE               0.5   // degrees celsius
 #define PRECISION               2
 #define FLOAT_LENGTH            6
-#define MAX_HLT_TEMPERATURE     80    // degrees celsius
-#define HLT_MLT_HEATUP_DIFF     15    // degrees celsius
+#define MAX_HLT_TEMPERATURE     80
+#define HLT_MLT_HEATUP_DIFF     15
 
 void callback(char* topic, byte* payload, unsigned int length);
 
@@ -69,8 +78,11 @@ float setTempMLT       = NULL;
 float setTempHLT       = NULL;
 boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
+boolean pumpAutomatic  = true;
 
-// Callback function
+/**
+ *  Callback function to parse MQTT events
+ */
 void callback(char* topic, byte* payload, unsigned int length) 
 {
     char value[length + 1];
@@ -78,14 +90,22 @@ void callback(char* topic, byte* payload, unsigned int length)
   
     if (strcmp(topic, TOPIC_MASHER_SET_TEMP) == 0) {
         setTempMLT = atof(value);
-        Serial.print("Received: ");
-        Serial.print(topic);
-        Serial.println(": ");
-        Serial.println(setTempMLT);
+    } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
+        if (strcmp(value, PUMP_STATE_ON) == 0) {
+            pumpAutomatic = false;
+            switchRelais(PIN_RELAIS_PUMP, true);
+        } else if (strcmp(value, PUMP_STATE_OFF) == 0) {
+            pumpAutomatic = false;
+            switchRelais(PIN_RELAIS_PUMP, false);
+        } else {
+            pumpAutomatic = true;
+        }
     } else {
 //        Serial.println("----------");
 //        Serial.print("Unknown / not listening to topic: ");
-//        Serial.println(topic); 
+//        Serial.println(topic);
+//        Serial.print("value: ");
+//        Serial.println(value);
 //        Serial.println("----------");
     }
 }
@@ -141,7 +161,9 @@ void handleRecipe()
         switchRelais(PIN_RELAIS_TWO,   heatUpHLT);
         switchRelais(PIN_RELAIS_THREE, heatUpHLT);
         
-        switchRelais(PIN_RELAIS_PUMP, heatUpMLT);
+        if (pumpAutomatic) {
+            switchRelais(PIN_RELAIS_PUMP, heatUpMLT);
+        }
     }
 }
 
@@ -212,27 +234,28 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
 }
 
 /**
- *  Proxy method to publish a value to a topic
+ *  Proxy method to publish a value to a topic in MQTT
  *
  *  @param char* topic
  *  @param char* value
  */
 void publishString(char* topic, char* value) 
 {
-  if (client.connected()) {
-//      Serial.print("Publishing: ");
-//      Serial.print(topic);
-//      Serial.print(":");
-//      Serial.println(value);
-      client.publish(topic, value);
-  } else if (connectAndSubscribe()) {
-      publishString(topic, value);
-  }
+    if (client.connected()) {
+        client.publish(topic, trim(value));
+    } else if (connectAndSubscribe()) {
+        publishString(topic, value);
+    }
 }
 
+/**
+ *  Publishes a float to MQTT client
+ *
+ *  @param char* topic
+ *  @param float value
+ */
 void publishFloat(char* topic, float value) 
 {
-    // only publish data which is set
     if (value != NULL) {
         char *charTemp = NULL;
         
@@ -244,6 +267,7 @@ void publishFloat(char* topic, float value)
 
 /**
  *  Reads the temperature of the sensors, and stores these in `temp` variable and `sensor` variable
+ *  @todo optimize sensor search, use predefined ids to get value
  */
 boolean readTemperatures() 
 {
@@ -309,8 +333,8 @@ boolean readTemperatures()
  */
 void convertTemperature(float temp, char **charTemp) 
 {
-   *charTemp = (char *)malloc(sizeof(char) * (FLOAT_LENGTH + 1));
-   dtostrf(temp, FLOAT_LENGTH, PRECISION, *charTemp);
+    *charTemp = (char *)malloc(sizeof(char) * (FLOAT_LENGTH + 1));
+    dtostrf(temp, FLOAT_LENGTH, PRECISION, *charTemp);
 }
 
 /**
@@ -328,4 +352,18 @@ void switchRelais(int relais, boolean state)
 //        Serial.println("Set relais " + String(relais) + " OFF");
         digitalWrite(relais, HIGH);
     }
+}
+
+/**
+ * Trims char array
+ */
+char* trim(char* value) 
+{
+    char *s = value - 1, *e = value + strlen (value);
+
+    while (++s < e && *s < 33);
+    while (--e > s && *e < 33);
+    *(++e) = (char) 0;
+
+    return s;
 }
