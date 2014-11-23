@@ -17,8 +17,8 @@
 
 // Network settings
 byte mac[]    = {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-//byte server[] = { 192, 168, 2, 132 };
-byte server[] = { 192, 168, 2, 114 };
+byte server[] = { 192, 168, 2, 132 };
+//byte server[] = { 192, 168, 2, 114 };
 byte ip[]     = { 192, 168, 2, 150 };
 
 // Temperature probe addresses
@@ -319,7 +319,7 @@ boolean readTemperatures()
     } else if (sensor == SENSOR_EXT) {
         tempEXT = temp;
         tempMLT = temp; // test purposes because of single probe
-        tempBLT = temp; // test purposes because of single probe
+        //tempBLT = temp; // test purposes because of single probe
     }
     
     return true;
