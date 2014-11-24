@@ -5,7 +5,6 @@
  
 /**
  * @todo
- * - heat up MLT, when we need to reach a higher temp (begin of new set temp (+/- 5oC diff)) only when the pump is on
  */
 
 #include <SPI.h>
@@ -16,50 +15,50 @@
 #include <elapsedMillis.h>
 
 // Network settings
-byte mac[]    = {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-byte server[] = { 192, 168, 2, 132 };
-//byte server[] = { 192, 168, 2, 114 };
-byte ip[]     = { 192, 168, 2, 150 };
+byte mac[]    =                     {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
+byte server[] =                     { 192, 168, 2, 132 };
+//byte server[] =                     { 192, 168, 2, 114 };
+byte ip[]     =                     { 192, 168, 2, 150 };
 
 // Temperature probe addresses
-#define SENSOR_HLT "10bab04c280b7"
-#define SENSOR_MLT "104bbc4d2805c"
-#define SENSOR_BLT "103d1325280a6"
-#define SENSOR_EXT "1097e4242804d"
+#define SENSOR_HLT                  "10bab04c280b7"
+#define SENSOR_MLT                  "104bbc4d2805c"
+#define SENSOR_BLT                  "103d1325280a6"
+#define SENSOR_EXT                  "1097e4242804d"
 
-#define ARDUINO_CLIENT "brouwkuypArduinoClient"
+#define ARDUINO_CLIENT              "brouwkuypArduinoClient"
 
 // Subscribe topics
-#define TOPIC_MASHER_SET_TEMP "brewery/brewhouse01/masher/set_temp"
-#define TOPIC_PUMP_SET_STATE  "brewery/brewhouse01/pump/set_state"
+#define TOPIC_MASHER_SET_TEMP       "brewery/brewhouse01/masher/set_temp"
+#define TOPIC_PUMP_SET_STATE        "brewery/brewhouse01/pump/set_state"
 
 // Publish topics
-#define TOPIC_MASHER_CURR_TEMP     "brewery/brewhouse01/masher/curr_temp"
-#define TOPIC_MASHER_MLT_CURR_TEMP "brewery/brewhouse01/masher/mlt/curr_temp"
-#define TOPIC_MASHER_HLT_CURR_TEMP "brewery/brewhouse01/masher/hlt/curr_temp"
-#define TOPIC_BOILER_CURR_TEMP     "brewery/brewhouse01/boiler/curr_temp"
-#define TOPIC_EXT_CURR_TEMP        "brewery/brewhouse01/ext/curr_temp"
-#define TOPIC_PUMP_CURR_STATE      "brewery/brewhouse01/pump/curr_state"
+#define TOPIC_MASHER_CURR_TEMP      "brewery/brewhouse01/masher/curr_temp"
+#define TOPIC_MASHER_MLT_CURR_TEMP  "brewery/brewhouse01/masher/mlt/curr_temp"
+#define TOPIC_MASHER_HLT_CURR_TEMP  "brewery/brewhouse01/masher/hlt/curr_temp"
+#define TOPIC_BOILER_CURR_TEMP      "brewery/brewhouse01/boiler/curr_temp"
+#define TOPIC_EXT_CURR_TEMP         "brewery/brewhouse01/ext/curr_temp"
+#define TOPIC_PUMP_CURR_STATE       "brewery/brewhouse01/pump/curr_state"
 
-#define PUMP_STATE_ON              "on"
-#define PUMP_STATE_OFF             "off"
+#define PUMP_STATE_ON               "on"
+#define PUMP_STATE_OFF              "off"
 
 // Declaration pins
-#define PIN_SENSOR_TEMPERATURE  2
-#define PIN_RELAIS_PUMP         5
-#define PIN_RELAIS_ONE          6
-#define PIN_RELAIS_TWO          7
-#define PIN_RELAIS_THREE        8
-#define PIN_RELAIS_FOUR         9
-#define PIN_RELAIS_FIVE         10
+#define PIN_SENSOR_TEMPERATURE      2
+#define PIN_RELAIS_PUMP             5
+#define PIN_RELAIS_HLT_ONE          6
+#define PIN_RELAIS_HLT_TWO          7
+#define PIN_RELAIS_HLT_THREE        8
+#define PIN_RELAIS_MLT              9
 
 // Config settings
-#define LOOP_INTERVAL           1000  // milliseconds
-#define HYSTERESE               0.5   // degrees celsius
-#define PRECISION               2
-#define FLOAT_LENGTH            6
-#define MAX_HLT_TEMPERATURE     80
-#define HLT_MLT_HEATUP_DIFF     15
+#define LOOP_INTERVAL               1000  // milliseconds
+#define HYSTERESE                   0.5   // degrees celsius
+#define PRECISION                   2     // digits behind comma
+#define FLOAT_LENGTH                6     // bytes
+#define MAX_HLT_TEMPERATURE         80    // degrees celsius
+#define HLT_MLT_HEATUP_DIFF         15    // degrees celsius
+#define MLT_HEATUP_DIFF             3     // degrees celsius
 
 void callback(char* topic, byte* payload, unsigned int length);
 
@@ -116,10 +115,11 @@ void setup()
     Ethernet.begin(mac, ip);
   
     // initialize Relais
-    pinMode(PIN_RELAIS_ONE,   OUTPUT);
-    pinMode(PIN_RELAIS_TWO,   OUTPUT);
-    pinMode(PIN_RELAIS_THREE, OUTPUT);
-    pinMode(PIN_RELAIS_PUMP,  OUTPUT);
+    pinMode(PIN_RELAIS_HLT_ONE,   OUTPUT);
+    pinMode(PIN_RELAIS_HLT_TWO,   OUTPUT);
+    pinMode(PIN_RELAIS_HLT_THREE, OUTPUT);
+    pinMode(PIN_RELAIS_MLT,       OUTPUT);
+    pinMode(PIN_RELAIS_PUMP,      OUTPUT);
 }
 
 void loop()
@@ -157,12 +157,20 @@ void handleRecipe()
         heatUpHLT = handleHysterese(tempHLT, setTempHLT, heatUpHLT);
         heatUpMLT = handleHysterese(tempMLT, setTempMLT, heatUpMLT);
         
-        switchRelais(PIN_RELAIS_ONE,   heatUpHLT);
-        switchRelais(PIN_RELAIS_TWO,   heatUpHLT);
-        switchRelais(PIN_RELAIS_THREE, heatUpHLT);
+        switchRelais(PIN_RELAIS_HLT_ONE,   heatUpHLT);
+        switchRelais(PIN_RELAIS_HLT_TWO,   heatUpHLT);
+        switchRelais(PIN_RELAIS_HLT_THREE, heatUpHLT);
         
         if (pumpAutomatic) {
             switchRelais(PIN_RELAIS_PUMP, heatUpMLT);
+            // if pump is active and temp diff is more than MLT_HEATUP_DIFF, use extra heater under MLT
+            if (heatUpMLT && (setTempMLT - tempMLT) > MLT_HEATUP_DIFF) {
+                switchRelais(PIN_RELAIS_MLT, true);
+            } else {
+                switchRelais(PIN_RELAIS_MLT, false);
+            }
+        } else {
+            switchRelais(PIN_RELAIS_MLT, false);
         }
     }
 }
@@ -183,10 +191,6 @@ void publishData()
     } else {
         publishString(TOPIC_PUMP_CURR_STATE, "false");
     }
-    
-    // temp testing
-    //publishFloat(TOPIC_MASHER_SET_TEMP, 24.0);
-    //Serial.println("-----");
 }
 
 /******************
@@ -318,7 +322,7 @@ boolean readTemperatures()
         tempBLT = temp;
     } else if (sensor == SENSOR_EXT) {
         tempEXT = temp;
-        tempMLT = temp; // test purposes because of single probe
+        //tempMLT = temp; // test purposes because of single probe
         //tempBLT = temp; // test purposes because of single probe
     }
     
