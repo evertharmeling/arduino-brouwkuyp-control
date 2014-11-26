@@ -30,6 +30,7 @@ byte ip[]     =                     { 192, 168, 2, 150 };
 
 // Subscribe topics
 #define TOPIC_MASHER_SET_TEMP       "brewery/brewhouse01/masher/set_temp"
+#define TOPIC_PUMP_SET_MODE         "brewery/brewhouse01/pump/set_mode"
 #define TOPIC_PUMP_SET_STATE        "brewery/brewhouse01/pump/set_state"
 
 // Publish topics
@@ -38,8 +39,12 @@ byte ip[]     =                     { 192, 168, 2, 150 };
 #define TOPIC_MASHER_HLT_CURR_TEMP  "brewery/brewhouse01/masher/hlt/curr_temp"
 #define TOPIC_BOILER_CURR_TEMP      "brewery/brewhouse01/boiler/curr_temp"
 #define TOPIC_EXT_CURR_TEMP         "brewery/brewhouse01/ext/curr_temp"
+#define TOPIC_PUMP_CURR_MODE        "brewery/brewhouse01/pump/curr_mode"
 #define TOPIC_PUMP_CURR_STATE       "brewery/brewhouse01/pump/curr_state"
 
+// constants
+#define PUMP_MODE_AUTOMATIC         "automatic"
+#define PUMP_MODE_MANUAL            "manual"
 #define PUMP_STATE_ON               "on"
 #define PUMP_STATE_OFF              "off"
 
@@ -58,7 +63,7 @@ byte ip[]     =                     { 192, 168, 2, 150 };
 #define FLOAT_LENGTH                6     // bytes
 #define MAX_HLT_TEMPERATURE         80    // degrees celsius
 #define HLT_MLT_HEATUP_DIFF         15    // degrees celsius
-#define MLT_HEATUP_DIFF             3     // degrees celsius
+#define MLT_HEATUP_DIFF             5     // degrees celsius
 
 void callback(char* topic, byte* payload, unsigned int length);
 
@@ -77,7 +82,8 @@ float setTempMLT       = NULL;
 float setTempHLT       = NULL;
 boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
-boolean pumpAutomatic  = true;
+char* pumpMode         = PUMP_MODE_AUTOMATIC;
+char* pumpState        = PUMP_STATE_OFF;
 
 /**
  *  Callback function to parse MQTT events
@@ -91,13 +97,21 @@ void callback(char* topic, byte* payload, unsigned int length)
         setTempMLT = atof(value);
     } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
         if (strcmp(value, PUMP_STATE_ON) == 0) {
-            pumpAutomatic = false;
+            pumpMode = PUMP_MODE_MANUAL;
+            pumpState = PUMP_STATE_ON;
             switchRelais(PIN_RELAIS_PUMP, true);
         } else if (strcmp(value, PUMP_STATE_OFF) == 0) {
-            pumpAutomatic = false;
+            pumpMode = PUMP_MODE_MANUAL;
+            pumpState = PUMP_STATE_OFF;
             switchRelais(PIN_RELAIS_PUMP, false);
         } else {
-            pumpAutomatic = true;
+            pumpMode = PUMP_MODE_AUTOMATIC;
+        }
+    } else if (strcmp(topic, TOPIC_PUMP_SET_MODE) == 0) {
+        if (strcmp(value, PUMP_MODE_AUTOMATIC) == 0) {
+            pumpMode = PUMP_MODE_AUTOMATIC;
+        } else if (strcmp(value, PUMP_MODE_MANUAL) == 0) {
+            pumpMode = PUMP_MODE_MANUAL;
         }
     } else {
 //        Serial.println("----------");
@@ -161,11 +175,18 @@ void handleRecipe()
         switchRelais(PIN_RELAIS_HLT_TWO,   heatUpHLT);
         switchRelais(PIN_RELAIS_HLT_THREE, heatUpHLT);
         
-        if (pumpAutomatic) {
+        if (pumpMode == PUMP_MODE_AUTOMATIC) {
             switchRelais(PIN_RELAIS_PUMP, heatUpMLT);
+            
+            if (heatUpMLT) {
+                pumpState = PUMP_STATE_ON;
+            } else {
+                pumpState = PUMP_STATE_OFF;
+            }
+            
             // if pump is active and temp diff is more than MLT_HEATUP_DIFF, use extra heater under MLT
             if (heatUpMLT && (setTempMLT - tempMLT) > MLT_HEATUP_DIFF) {
-                switchRelais(PIN_RELAIS_MLT, true);
+                switchRelais(PIN_RELAIS_MLT, true);  
             } else {
                 switchRelais(PIN_RELAIS_MLT, false);
             }
@@ -185,12 +206,8 @@ void publishData()
     publishFloat(TOPIC_MASHER_HLT_CURR_TEMP, tempHLT);
     publishFloat(TOPIC_BOILER_CURR_TEMP, tempBLT);
     publishFloat(TOPIC_EXT_CURR_TEMP, tempEXT);
-    
-    if (heatUpMLT) {
-        publishString(TOPIC_PUMP_CURR_STATE, "true");
-    } else {
-        publishString(TOPIC_PUMP_CURR_STATE, "false");
-    }
+    publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
+    publishString(TOPIC_PUMP_CURR_STATE, pumpState);
 }
 
 /******************
@@ -322,8 +339,9 @@ boolean readTemperatures()
         tempBLT = temp;
     } else if (sensor == SENSOR_EXT) {
         tempEXT = temp;
-        //tempMLT = temp; // test purposes because of single probe
-        //tempBLT = temp; // test purposes because of single probe
+        tempHLT = temp; // test purposes because of single probe
+        tempMLT = temp; // test purposes because of single probe
+        tempBLT = temp; // test purposes because of single probe
     }
     
     return true;
