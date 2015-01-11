@@ -50,11 +50,12 @@ byte ip[]     =                     { 192, 168, 2, 150 };
 
 // Declaration pins
 #define PIN_SENSOR_TEMPERATURE      2
-#define PIN_RELAIS_PUMP             5
-#define PIN_RELAIS_HLT_ONE          6
-#define PIN_RELAIS_HLT_TWO          7
-#define PIN_RELAIS_HLT_THREE        8
-#define PIN_RELAIS_MLT              9
+#define PIN_RELAIS_HLT_ONE          5
+#define PIN_RELAIS_HLT_TWO          6
+#define PIN_RELAIS_HLT_THREE        7
+// empty place for free relais      8
+#define PIN_RELAIS_PUMP             9
+#define PIN_RELAIS_MLT              10
 
 // Config settings
 #define LOOP_INTERVAL               1000  // milliseconds
@@ -63,7 +64,7 @@ byte ip[]     =                     { 192, 168, 2, 150 };
 #define FLOAT_LENGTH                6     // bytes
 #define MAX_HLT_TEMPERATURE         80    // degrees celsius
 #define HLT_MLT_HEATUP_DIFF         15    // degrees celsius
-#define MLT_HEATUP_DIFF             5     // degrees celsius
+#define MLT_HEATUP_DIFF             1     // degrees celsius
 
 void callback(char* topic, byte* payload, unsigned int length);
 
