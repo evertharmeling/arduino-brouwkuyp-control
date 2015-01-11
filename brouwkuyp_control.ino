@@ -13,18 +13,22 @@
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <elapsedMillis.h>
+#include <DallasTemperature.h>
 
 // Network settings
-byte mac[]    =                     {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-byte server[] =                     { 192, 168, 2, 132 };
-//byte server[] =                     { 192, 168, 2, 114 };
-byte ip[]     =                     { 192, 168, 2, 150 };
+uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
+uint8_t server[] =                  { 192, 168, 2, 132 };
+uint8_t ip[]     =                  { 192, 168, 2, 150 };
+
+#define SENSOR_ADDRESS_LENGTH       8
+#define SENSOR_RESOLUTION           9
 
 // Temperature probe addresses
-#define SENSOR_HLT                  "10bab04c280b7"
-#define SENSOR_MLT                  "104bbc4d2805c"
-#define SENSOR_BLT                  "103d1325280a6"
-#define SENSOR_EXT                  "1097e4242804d"
+uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7
+uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };    // 104bbc4d2805c
+uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };    // 103d1325280a6
+uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
+uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };    // 10e80325280f5
 
 #define ARDUINO_CLIENT              "brouwkuypArduinoClient"
 
@@ -68,7 +72,10 @@ byte ip[]     =                     { 192, 168, 2, 150 };
 
 void callback(char* topic, byte* payload, unsigned int length);
 
-OneWire ds(PIN_SENSOR_TEMPERATURE);
+// Setup a oneWire instance to communicate with any OneWire devices
+OneWire oneWire(PIN_SENSOR_TEMPERATURE);
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature sensors(&oneWire);
 EthernetClient ethClient;
 PubSubClient client(server, 1883, callback, ethClient);
 
@@ -128,6 +135,10 @@ void setup()
 {
     Serial.begin(9600);
     Ethernet.begin(mac, ip);
+    
+    sensors.begin();
+    Serial.print(sensors.getDeviceCount(), DEC);
+    Serial.println(" sensors found");
   
     // initialize Relais
     pinMode(PIN_RELAIS_HLT_ONE,   OUTPUT);
@@ -138,19 +149,19 @@ void setup()
 }
 
 void loop()
-{ 
-    readTemperatures();
-    
-    if (connectAndSubscribe())
-    {
+{
+    sensors.requestTemperatures();
+
+    if (connectAndSubscribe()) {
+        handleRecipe();
+      
         if (loopTime > LOOP_INTERVAL) {
             publishData();
-            handleRecipe();
-            
+
             loopTime = 0;
         }
     }
- 
+
     client.loop();
 }
 
@@ -169,8 +180,8 @@ void handleRecipe()
             setTempHLT = MAX_HLT_TEMPERATURE;
         }
         
-        heatUpHLT = handleHysterese(tempHLT, setTempHLT, heatUpHLT);
-        heatUpMLT = handleHysterese(tempMLT, setTempMLT, heatUpMLT);
+        heatUpHLT = handleHysterese(sensors.getTempC(sensorHLT), setTempHLT, heatUpHLT);
+        heatUpMLT = handleHysterese(sensors.getTempC(sensorMLT), setTempMLT, heatUpMLT);
         
         switchRelais(PIN_RELAIS_HLT_ONE,   heatUpHLT);
         switchRelais(PIN_RELAIS_HLT_TWO,   heatUpHLT);
@@ -186,7 +197,7 @@ void handleRecipe()
             }
             
             // if pump is active and temp diff is more than MLT_HEATUP_DIFF, use extra heater under MLT
-            if (heatUpMLT && (setTempMLT - tempMLT) > MLT_HEATUP_DIFF) {
+            if (heatUpMLT && (setTempMLT - sensors.getTempC(sensorMLT)) > MLT_HEATUP_DIFF) {
                 switchRelais(PIN_RELAIS_MLT, true);  
             } else {
                 switchRelais(PIN_RELAIS_MLT, false);
@@ -202,11 +213,11 @@ void handleRecipe()
   */
 void publishData() 
 {    
-    publishFloat(TOPIC_MASHER_CURR_TEMP, tempMLT);
-    publishFloat(TOPIC_MASHER_MLT_CURR_TEMP, tempMLT);
-    publishFloat(TOPIC_MASHER_HLT_CURR_TEMP, tempHLT);
-    publishFloat(TOPIC_BOILER_CURR_TEMP, tempBLT);
-    publishFloat(TOPIC_EXT_CURR_TEMP, tempEXT);
+    publishFloat(TOPIC_MASHER_CURR_TEMP, sensors.getTempC(sensorMLT));
+    publishFloat(TOPIC_MASHER_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));
+    publishFloat(TOPIC_MASHER_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
+    publishFloat(TOPIC_BOILER_CURR_TEMP, sensors.getTempC(sensorBLT));
+    publishFloat(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
     publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
     publishString(TOPIC_PUMP_CURR_STATE, pumpState);
 }
@@ -285,67 +296,6 @@ void publishFloat(char* topic, float value)
         publishString(topic, charTemp);
         free(charTemp);
     }
-}
-
-/**
- *  Reads the temperature of the sensors, and stores these in `temp` variable and `sensor` variable
- *  @todo optimize sensor search, use predefined ids to get value
- */
-boolean readTemperatures() 
-{
-    byte i;
-    byte data[12];
-    byte addr[8];
-    String sensor = NULL;
-  
-    if (!ds.search(addr)) {
-        ds.reset_search();
-        delay(250);
-        return false;
-    }
-
-    if (OneWire::crc8(addr, 7) != addr[7]) {
-        return false;
-    }
-
-    ds.reset();
-    ds.select(addr);
-    for ( i = 0; i < 8; i++) {
-        sensor += String(addr[i], HEX);
-    }
-
-    ds.write(0x44, 1);
-  
-    ds.reset();
-    ds.select(addr);    
-    ds.write(0xBE);
-
-    for ( i = 0; i < 9; i++) {
-        data[i] = ds.read();
-    }
-
-    int16_t raw = (data[1] << 8) | data[0];
-    raw = raw << 3;
-    if (data[7] == 0x10) {
-        raw = (raw & 0xFFF0) + 12 - data[6];
-    } 
-    
-    float temp = (float) raw / 16.0;
-    
-    if (sensor == SENSOR_HLT) {
-        tempHLT = temp;
-    } else if (sensor == SENSOR_MLT) {
-        tempMLT = temp;
-    } else if (sensor == SENSOR_BLT) {
-        tempBLT = temp;
-    } else if (sensor == SENSOR_EXT) {
-        tempEXT = temp;
-        tempHLT = temp; // test purposes because of single probe
-        tempMLT = temp; // test purposes because of single probe
-        tempBLT = temp; // test purposes because of single probe
-    }
-    
-    return true;
 }
 
 /**
