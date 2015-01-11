@@ -30,6 +30,13 @@ uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };   
 uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
 uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };    // 10e80325280f5
 
+// *************************************************************************** //
+// *** test purposes, use extra sensors to imitate original HLT + MLT sensors
+//uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
+//uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };     // 10e80325280f5
+// *** above 2 lines should not be used in production environment!
+// *************************************************************************** //
+
 #define ARDUINO_CLIENT              "brouwkuypArduinoClient"
 
 // Subscribe topics
@@ -57,9 +64,9 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };   
 #define PIN_RELAIS_HLT_ONE          5
 #define PIN_RELAIS_HLT_TWO          6
 #define PIN_RELAIS_HLT_THREE        7
-// empty place for free relais      8
-#define PIN_RELAIS_PUMP             9
-#define PIN_RELAIS_MLT              10
+#define PIN_RELAIS_PUMP             8
+#define PIN_RELAIS_MLT              9
+//!!! DO NOT USE PINS 10 + 11 (they are already in use by Ethernet Shield)
 
 // Config settings
 #define LOOP_INTERVAL               1000  // milliseconds
@@ -146,6 +153,10 @@ void setup()
     pinMode(PIN_RELAIS_HLT_THREE, OUTPUT);
     pinMode(PIN_RELAIS_MLT,       OUTPUT);
     pinMode(PIN_RELAIS_PUMP,      OUTPUT);
+
+    // set initial relais state
+    switchRelais(PIN_RELAIS_PUMP, false);    
+    switchRelais(PIN_RELAIS_MLT, false);
 }
 
 void loop()
@@ -153,9 +164,9 @@ void loop()
     sensors.requestTemperatures();
 
     if (connectAndSubscribe()) {
-        handleRecipe();
       
         if (loopTime > LOOP_INTERVAL) {
+            handleRecipe();
             publishData();
 
             loopTime = 0;
@@ -196,9 +207,9 @@ void handleRecipe()
                 pumpState = PUMP_STATE_OFF;
             }
             
-            // if pump is active and temp diff is more than MLT_HEATUP_DIFF, use extra heater under MLT
+            // if pump is active and temp diff is more than MLT_HEATUP_DIFF, use extra heater under MLT            
             if (heatUpMLT && (setTempMLT - sensors.getTempC(sensorMLT)) > MLT_HEATUP_DIFF) {
-                switchRelais(PIN_RELAIS_MLT, true);  
+                switchRelais(PIN_RELAIS_MLT, true);
             } else {
                 switchRelais(PIN_RELAIS_MLT, false);
             }
@@ -319,10 +330,12 @@ void convertTemperature(float temp, char **charTemp)
 void switchRelais(int relais, boolean state) 
 {
     if (state) {
-//        Serial.println("Set relais " + String(relais) + " ON");
+        //Serial.println("Set relais " + String(relais) + " ON");
+        //Serial.println("Set LED " + String(relais) + " OFF");
         digitalWrite(relais, LOW);
     } else {
-//        Serial.println("Set relais " + String(relais) + " OFF");
+        //Serial.println("Set relais " + String(relais) + " OFF");
+        //Serial.println("Set LED " + String(relais) + " ON");
         digitalWrite(relais, HIGH);
     }
 }
