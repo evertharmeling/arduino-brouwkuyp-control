@@ -5,8 +5,14 @@
  
 /**
  * @todo
+ * - Connecting ArduinoClient to RabbitMQ within docker <hostIP:1883>?
+ * - Warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
+ *    - char* p = "abc"; // valid in C, invalid in C++
+ *    - char* p = (char*)"abc"; // OK
+ *    - char const *p="abc"; // OK
  */
 
+#include "env.h"
 #include <SPI.h>
 #include <Wire.h>
 #include <OneWire.h>
@@ -17,8 +23,8 @@
 
 // Network settings
 uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-uint8_t server[] =                  { 192, 168, 2, 132 };
-uint8_t ip[]     =                  { 192, 168, 2, 150 };
+uint8_t server[] =                  { 192, 168, 10, 10 };
+uint8_t ip[]     =                  { 192, 168, 10, 20 };
 
 #define SENSOR_ADDRESS_LENGTH       8
 #define SENSOR_RESOLUTION           9
@@ -37,21 +43,23 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };   
 // *** above 2 lines should not be used in production environment!
 // *************************************************************************** //
 
-#define ARDUINO_CLIENT              "brouwkuypArduinoClient"
+#define MQTT_CLIENT                 "brouwkuypArduinoClient"
+#define MQTT_USER                   SECRET_MQTT_USER
+#define MQTT_PASS                   SECRET_MQTT_PASS
 
 // Subscribe topics
-#define TOPIC_MASHER_SET_TEMP       "brewery/brewhouse01/masher/set_temp"
-#define TOPIC_PUMP_SET_MODE         "brewery/brewhouse01/pump/set_mode"
-#define TOPIC_PUMP_SET_STATE        "brewery/brewhouse01/pump/set_state"
+#define TOPIC_MLT_SET_TEMP          "brewery/forestroad/mlt/set_temp"
+#define TOPIC_PUMP_SET_MODE         "brewery/forestroad/pump/set_mode"
+#define TOPIC_PUMP_SET_STATE        "brewery/forestroad/pump/set_state"
 
 // Publish topics
-#define TOPIC_MASHER_CURR_TEMP      "brewery/brewhouse01/masher/curr_temp"
-#define TOPIC_MASHER_MLT_CURR_TEMP  "brewery/brewhouse01/masher/mlt/curr_temp"
-#define TOPIC_MASHER_HLT_CURR_TEMP  "brewery/brewhouse01/masher/hlt/curr_temp"
-#define TOPIC_BOILER_CURR_TEMP      "brewery/brewhouse01/boiler/curr_temp"
-#define TOPIC_EXT_CURR_TEMP         "brewery/brewhouse01/ext/curr_temp"
-#define TOPIC_PUMP_CURR_MODE        "brewery/brewhouse01/pump/curr_mode"
-#define TOPIC_PUMP_CURR_STATE       "brewery/brewhouse01/pump/curr_state"
+#define TOPIC_MLT_CURR_TEMP         "brewery/forestroad/mlt/curr_temp"
+#define TOPIC_HLT_CURR_TEMP         "brewery/forestroad/hlt/curr_temp"
+#define TOPIC_BLT_CURR_TEMP         "brewery/forestroad/blt/curr_temp"
+#define TOPIC_EXT_CURR_TEMP         "brewery/forestroad/ext/curr_temp"
+#define TOPIC_EXT2_CURR_TEMP         "brewery/forestroad/ext2/curr_temp"
+#define TOPIC_PUMP_CURR_MODE        "brewery/forestroad/pump/curr_mode"
+#define TOPIC_PUMP_CURR_STATE       "brewery/forestroad/pump/curr_state"
 
 // constants
 #define PUMP_MODE_AUTOMATIC         "automatic"
@@ -84,7 +92,7 @@ OneWire oneWire(PIN_SENSOR_TEMPERATURE);
 // Pass our oneWire reference to Dallas Temperature. 
 DallasTemperature sensors(&oneWire);
 EthernetClient ethClient;
-PubSubClient client(server, 1883, callback, ethClient);
+PubSubClient mqttClient(server, 1883, callback, ethClient);
 
 // Initiate variables
 elapsedMillis loopTime;
@@ -108,7 +116,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     char value[length + 1];
     snprintf(value, length + 1, "%s", payload);
   
-    if (strcmp(topic, TOPIC_MASHER_SET_TEMP) == 0) {
+    if (strcmp(topic, TOPIC_MLT_SET_TEMP) == 0) {
         setTempMLT = atof(value);
     } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
         if (strcmp(value, PUMP_STATE_ON) == 0) {
@@ -141,7 +149,12 @@ void callback(char* topic, byte* payload, unsigned int length)
 void setup()
 {
     Serial.begin(9600);
+
+//    ethClient.println("Authorization: Basic ZGUtc2FlY2s6QnIwdXdLdXlQ"); // user/pass of RabbitMQ server
+    
     Ethernet.begin(mac, ip);
+    // give the Ethernet shield a second to initialize...
+    delay(1000);
     
     sensors.begin();
     Serial.print(sensors.getDeviceCount(), DEC);
@@ -173,7 +186,7 @@ void loop()
         }
     }
 
-    client.loop();
+    mqttClient.loop();
 }
 
 /**
@@ -224,13 +237,22 @@ void handleRecipe()
   */
 void publishData() 
 {    
-    publishFloat(TOPIC_MASHER_CURR_TEMP, sensors.getTempC(sensorMLT));
-    publishFloat(TOPIC_MASHER_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));
-    publishFloat(TOPIC_MASHER_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
-    publishFloat(TOPIC_BOILER_CURR_TEMP, sensors.getTempC(sensorBLT));
-    publishFloat(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
+    Serial.print("EXT: ");
+    Serial.println(sensors.getTempC(sensorEXT));
+
+    Serial.print("EXT2: ");
+    Serial.println(sensors.getTempC(sensorEXT2));
+  
+    publishFloat(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));
+    publishFloat(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
+    publishFloat(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
+    
     publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
     publishString(TOPIC_PUMP_CURR_STATE, pumpState);
+
+    // extra sensors for testing purposes
+    publishFloat(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
+    publishFloat(TOPIC_EXT2_CURR_TEMP, sensors.getTempC(sensorEXT2));
 }
 
 /******************
@@ -242,10 +264,10 @@ void publishData()
  */
 boolean connectAndSubscribe() 
 {
-    if (!client.connected()) {
-        if (client.connect(ARDUINO_CLIENT)) {
+    if (!mqttClient.connected()) {
+        if (mqttClient.connect(MQTT_CLIENT, MQTT_USER, MQTT_PASS)) {
             Serial.println("Connected!");
-            client.subscribe("brewery/#");
+            mqttClient.subscribe("brewery/#");
             Serial.println("Subscribed!");
             
             return true;
@@ -285,8 +307,8 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
  */
 void publishString(char* topic, char* value) 
 {
-    if (client.connected()) {
-        client.publish(topic, trim(value));
+    if (mqttClient.connected()) {
+        mqttClient.publish(topic, trim(value));
     } else if (connectAndSubscribe()) {
         publishString(topic, value);
     }
