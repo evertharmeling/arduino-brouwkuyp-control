@@ -149,12 +149,9 @@ void callback(char* topic, byte* payload, unsigned int length)
 void setup()
 {
     Serial.begin(9600);
-
-//    ethClient.println("Authorization: Basic ZGUtc2FlY2s6QnIwdXdLdXlQ"); // user/pass of RabbitMQ server
-    
     Ethernet.begin(mac, ip);
-    // give the Ethernet shield a second to initialize...
-    delay(1000);
+    // give the Ethernet shield 500 milliseconds to initialize...
+    delay(500);
     
     sensors.begin();
     Serial.print(sensors.getDeviceCount(), DEC);
