@@ -17,13 +17,18 @@
 #include <Wire.h>
 #include <OneWire.h>
 #include <Ethernet.h>
+#include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <elapsedMillis.h>
 #include <DallasTemperature.h>
 
 // Network settings
+// Ethernet shield mac address
 uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-uint8_t server[] =                  { 192, 168, 10, 10 };
+// RabbitMQ IP address
+uint8_t server[] =                  { 192, 168, 10, 102 };
+// Static client IP, should be in the same subnet as the server IP
+// Linksys Router is set up to give out IP's via DHCP from 192.168.10.100 upwards
 uint8_t ip[]     =                  { 192, 168, 10, 20 };
 
 #define SENSOR_ADDRESS_LENGTH       8
@@ -57,7 +62,7 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };   
 #define TOPIC_HLT_CURR_TEMP         "brewery/forestroad/hlt/curr_temp"
 #define TOPIC_BLT_CURR_TEMP         "brewery/forestroad/blt/curr_temp"
 #define TOPIC_EXT_CURR_TEMP         "brewery/forestroad/ext/curr_temp"
-#define TOPIC_EXT2_CURR_TEMP         "brewery/forestroad/ext2/curr_temp"
+#define TOPIC_EXT2_CURR_TEMP        "brewery/forestroad/ext2/curr_temp"
 #define TOPIC_PUMP_CURR_MODE        "brewery/forestroad/pump/curr_mode"
 #define TOPIC_PUMP_CURR_STATE       "brewery/forestroad/pump/curr_state"
 
@@ -305,7 +310,12 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
 void publishString(char* topic, char* value) 
 {
     if (mqttClient.connected()) {
-        mqttClient.publish(topic, trim(value));
+          // @todo check with Luuk to have 'createEvent' return the jsonString
+          char jsonString[100];
+          DynamicJsonDocument jsonObject = buildEvent(topic, value);
+          
+          serializeJson(jsonObject, jsonString);
+          mqttClient.publish(topic, jsonString);
     } else if (connectAndSubscribe()) {
         publishString(topic, value);
     }
@@ -326,6 +336,24 @@ void publishFloat(char* topic, float value)
         publishString(topic, charTemp);
         free(charTemp);
     }
+}
+
+/**
+ *  Publish an event in JSON format, makes it possible to send more information at once.
+ * 
+ *  @param char* topic
+ *  @param char* value
+ */
+DynamicJsonDocument buildEvent(char* topic, char* value)
+{
+    DynamicJsonDocument jsonObject(100);
+
+    // https://www.circuitbasics.com/using-an-arduino-ethernet-shield-for-timekeeping/
+    //jsonObject["timestamp"] = now();
+    jsonObject["topic"] = topic;
+    jsonObject["value"] = trim(value);
+    
+    return jsonObject;
 }
 
 /**
@@ -360,11 +388,14 @@ void switchRelais(int relais, boolean state)
 }
 
 /**
- * Trims char array
+ *  Trims char array
+ * 
+ *  @param char* value
  */
 char* trim(char* value) 
 {
-    char *s = value - 1, *e = value + strlen (value);
+    char *s = value - 1;
+    char *e = value + strlen (value);
 
     while (++s < e && *s < 33);
     while (--e > s && *e < 33);

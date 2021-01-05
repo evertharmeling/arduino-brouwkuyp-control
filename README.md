@@ -49,6 +49,7 @@ The following libraries are need to be installed (via `Tools > Manage libraries.
   - **OneWire** (v2.3.5)
 - **elapsedMillis** (v1.0.6) [timing]
 - **PubSubClient** (v2.8.0) [AMQT messages]
+- **ArduinoJson** (v6.17.2) [convert data to json in event]
 
 ### Variables
 
