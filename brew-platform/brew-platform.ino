@@ -47,7 +47,8 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };   
 // *** above 2 lines should not be used in production environment!
 // *************************************************************************** //
 
-#define MQTT_CLIENT                 "brouwkuypArduinoClient"
+// Should be a unique identifier to be able to identify the client within the whole infrastructure
+#define MQTT_CLIENT                 "bp-fr-arduino-client"
 #define MQTT_USER                   SECRET_MQTT_USER
 #define MQTT_PASS                   SECRET_MQTT_PASS
 
