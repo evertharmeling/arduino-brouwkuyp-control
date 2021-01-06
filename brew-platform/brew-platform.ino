@@ -53,11 +53,13 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };   
 #define MQTT_PASS                   SECRET_MQTT_PASS
 
 // Subscribe topics
+// topic format: "brewery/<brewery_name>/<unit>/<action>"
 #define TOPIC_MLT_SET_TEMP          "brewery/forestroad/mlt/set_temp"
 #define TOPIC_PUMP_SET_MODE         "brewery/forestroad/pump/set_mode"
 #define TOPIC_PUMP_SET_STATE        "brewery/forestroad/pump/set_state"
 
 // Publish topics
+// topic format: "brewery/<brewery_name>/<unit>/<action>"
 #define TOPIC_MLT_CURR_TEMP         "brewery/forestroad/mlt/curr_temp"
 #define TOPIC_HLT_CURR_TEMP         "brewery/forestroad/hlt/curr_temp"
 #define TOPIC_BLT_CURR_TEMP         "brewery/forestroad/blt/curr_temp"
