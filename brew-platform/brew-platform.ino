@@ -114,6 +114,11 @@ boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
 char* pumpMode         = PUMP_MODE_AUTOMATIC;
 char* pumpState        = PUMP_STATE_OFF;
+// hacky workaround to work with the RELAIS_PIN number as array index
+// as the highest PIN number is currently 9, we create an array with 10 items and initialize it with 'off' (false) state
+int relaisStates[10]    = {
+  false, false, false, false, false, false, false, false, false, false
+};
 
 /**
     Callback function to parse MQTT events
@@ -124,32 +129,38 @@ void callback(char* topic, byte* payload, unsigned int length)
   snprintf(value, length + 1, "%s", payload);
 
   if (strcmp(topic, TOPIC_MLT_SET_TEMP) == 0) {
+    Serial.println("Topic: MLT set temperature; >" + String(value) + "°C<");
     setTempMLT = atof(value);
   } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
     if (strcmp(value, PUMP_STATE_ON) == 0) {
+      Serial.println("Topic: PUMP set STATE; mode: >MANUAL<, state: >ON<");
       pumpMode = PUMP_MODE_MANUAL;
       pumpState = PUMP_STATE_ON;
       switchRelais(PIN_RELAIS_PUMP, true);
     } else if (strcmp(value, PUMP_STATE_OFF) == 0) {
+      Serial.println("Topic: PUMP set STATE; mode: >MANUAL<, state: >OFF<");
       pumpMode = PUMP_MODE_MANUAL;
       pumpState = PUMP_STATE_OFF;
       switchRelais(PIN_RELAIS_PUMP, false);
     } else {
+      Serial.println("Topic: PUMP set STATE; mode: >AUTOMATIC<");
       pumpMode = PUMP_MODE_AUTOMATIC;
     }
   } else if (strcmp(topic, TOPIC_PUMP_SET_MODE) == 0) {
     if (strcmp(value, PUMP_MODE_AUTOMATIC) == 0) {
+      Serial.println("Topic: PUMP set mode >AUTOMATIC<");
       pumpMode = PUMP_MODE_AUTOMATIC;
     } else if (strcmp(value, PUMP_MODE_MANUAL) == 0) {
+      Serial.println("Topic: PUMP set mode >MANUAL<");
       pumpMode = PUMP_MODE_MANUAL;
     }
   } else {
-    //        Serial.println("----------");
-    //        Serial.print("Unknown / not listening to topic: ");
-    //        Serial.println(topic);
-    //        Serial.print("value: ");
-    //        Serial.println(value);
-    //        Serial.println("----------");
+//    Serial.println("----------");
+//    Serial.print("Unknown / not listening to topic: ");
+//    Serial.println(topic);
+//    Serial.print("value: ");
+//    Serial.println(value);
+//    Serial.println("----------");
   }
 }
 
@@ -373,16 +384,20 @@ void convertTemperature(float temp, char **charTemp)
     @param int relais     The pin of the relais
     @param boolean state  true / false
 */
-void switchRelais(int relais, boolean state)
+void switchRelais(int relaisPin, boolean state)
 {
-  if (state) {
-    //Serial.println("Set relais " + String(relais) + " ON");
-    //Serial.println("Set LED " + String(relais) + " OFF");
-    digitalWrite(relais, LOW);
+  //Serial.println("Switch: " + String(relaisPin) + ", to state: " + String(state) + ", current state: " + String(relaisStates[relaisPin]));
+  
+  if (state && !relaisStates[relaisPin]) {
+    Serial.println("  Relais: " + String(relaisPin) + "; unit turned >ON<");
+    digitalWrite(relaisPin, LOW);
+    relaisStates[relaisPin] = 1;
+  } else if (!state && relaisStates[relaisPin]) {
+    Serial.println("  Relais: " + String(relaisPin) + "; unit turned >OFF<");
+    digitalWrite(relaisPin, HIGH);
+    relaisStates[relaisPin] = 0;
   } else {
-    //Serial.println("Set relais " + String(relais) + " OFF");
-    //Serial.println("Set LED " + String(relais) + " ON");
-    digitalWrite(relais, HIGH);
+    //Serial.println("  Relais: " + String(relaisPin) + "; no change needed");
   }
 }
 
