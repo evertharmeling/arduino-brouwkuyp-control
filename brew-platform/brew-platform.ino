@@ -5,11 +5,7 @@
 
 /**
    @todo
-   - Connecting ArduinoClient to RabbitMQ within docker <hostIP:1883>?
-   - Warning: ISO C++ forbids converting a string constant to 'char*' [-Wwrite-strings]
-      - char* p = "abc"; // valid in C, invalid in C++
-      - char* p = (char*)"abc"; // OK
-      - char const *p="abc"; // OK
+     - ...
 */
 
 #include "env.h"
@@ -129,29 +125,29 @@ void callback(char* topic, byte* payload, unsigned int length)
   snprintf(value, length + 1, "%s", payload);
 
   if (strcmp(topic, TOPIC_MLT_SET_TEMP) == 0) {
-    Serial.println("Topic: MLT set temperature; >" + String(value) + "°C<");
+    Serial.println("Topic: MLT set temperature; > " + String(value) + "°C <");
     setTempMLT = atof(value);
   } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
     if (strcmp(value, PUMP_STATE_ON) == 0) {
-      Serial.println("Topic: PUMP set STATE; mode: >MANUAL<, state: >ON<");
+//      Serial.println("Topic: PUMP set STATE; mode: > MANUAL <, state: > ON <");
       pumpMode = PUMP_MODE_MANUAL;
       pumpState = PUMP_STATE_ON;
       switchRelais(PIN_RELAIS_PUMP, true);
     } else if (strcmp(value, PUMP_STATE_OFF) == 0) {
-      Serial.println("Topic: PUMP set STATE; mode: >MANUAL<, state: >OFF<");
+//      Serial.println("Topic: PUMP set STATE; mode: > MANUAL <, state: > OFF <");
       pumpMode = PUMP_MODE_MANUAL;
       pumpState = PUMP_STATE_OFF;
       switchRelais(PIN_RELAIS_PUMP, false);
     } else {
-      Serial.println("Topic: PUMP set STATE; mode: >AUTOMATIC<");
+//      Serial.println("Topic: PUMP set STATE; mode: > AUTOMATIC < (implicit)");
       pumpMode = PUMP_MODE_AUTOMATIC;
     }
   } else if (strcmp(topic, TOPIC_PUMP_SET_MODE) == 0) {
     if (strcmp(value, PUMP_MODE_AUTOMATIC) == 0) {
-      Serial.println("Topic: PUMP set mode >AUTOMATIC<");
+//      Serial.println("Topic: PUMP set mode > AUTOMATIC <");
       pumpMode = PUMP_MODE_AUTOMATIC;
     } else if (strcmp(value, PUMP_MODE_MANUAL) == 0) {
-      Serial.println("Topic: PUMP set mode >MANUAL<");
+//      Serial.println("Topic: PUMP set mode > MANUAL <");
       pumpMode = PUMP_MODE_MANUAL;
     }
   } else {
@@ -168,8 +164,8 @@ void setup()
 {
   Serial.begin(9600);
   Ethernet.begin(mac, ip);
-  // give the Ethernet shield 500 milliseconds to initialize...
-  delay(500);
+  // give the Ethernet shield 200 milliseconds to initialize...
+  delay(200);
 
   sensors.begin();
   Serial.print(sensors.getDeviceCount(), DEC);
@@ -275,13 +271,12 @@ boolean connectAndSubscribe()
 {
   if (!mqttClient.connected()) {
     if (mqttClient.connect(MQTT_CLIENT, MQTT_USER, MQTT_PASS)) {
-      Serial.println("Connected!");
       mqttClient.subscribe("brewery/#");
-      Serial.println("Subscribed!");
+      Serial.println("Succesfully subscribed to MQTT server!");
 
       return true;
     } else {
-      Serial.println("Unable to connect!");
+      Serial.println("Unable to connect to MQTT server!");
     }
   }
 }
@@ -389,11 +384,11 @@ void switchRelais(int relaisPin, boolean state)
   //Serial.println("Switch: " + String(relaisPin) + ", to state: " + String(state) + ", current state: " + String(relaisStates[relaisPin]));
   
   if (state && !relaisStates[relaisPin]) {
-    Serial.println("  Relais: " + String(relaisPin) + "; unit turned >ON<");
+    Serial.println("  Relais: " + String(relaisPin) + "; turned > ON <");
     digitalWrite(relaisPin, LOW);
     relaisStates[relaisPin] = 1;
   } else if (!state && relaisStates[relaisPin]) {
-    Serial.println("  Relais: " + String(relaisPin) + "; unit turned >OFF<");
+    Serial.println("  Relais: " + String(relaisPin) + "; turned > OFF <");
     digitalWrite(relaisPin, HIGH);
     relaisStates[relaisPin] = 0;
   } else {
