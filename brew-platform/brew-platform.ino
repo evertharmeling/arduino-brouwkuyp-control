@@ -17,7 +17,6 @@
 #include <Wire.h>
 #include <OneWire.h>
 #include <Ethernet.h>
-#include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <elapsedMillis.h>
 #include <DallasTemperature.h>
@@ -66,7 +65,7 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };   
 #define TOPIC_PUMP_CURR_MODE        "brewery/forestroad/pump/curr_mode"
 #define TOPIC_PUMP_CURR_STATE       "brewery/forestroad/pump/curr_state"
 
-// constants
+// Constants
 #define PUMP_MODE_AUTOMATIC         "automatic"
 #define PUMP_MODE_MANUAL            "manual"
 #define PUMP_STATE_ON               "on"
@@ -239,12 +238,6 @@ void handleRecipe()
   */
 void publishData() 
 {    
-    Serial.print("EXT: ");
-    Serial.println(sensors.getTempC(sensorEXT));
-
-    Serial.print("EXT2: ");
-    Serial.println(sensors.getTempC(sensorEXT2));
-  
     publishFloat(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));
     publishFloat(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
     publishFloat(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
@@ -280,7 +273,7 @@ boolean connectAndSubscribe()
 }
 
 /**
- *  Uniform way of handling the hysterese check, to prevent switching the relais too fast on/off
+ *  Uniform way of handling the hysterese check, to prevent switching the relais on / off too fast
  *
  *  @param float currTemp   Current temperature value
  *  @param float setTemp    Desired temperature
@@ -310,11 +303,9 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
 void publishString(char* topic, char* value) 
 {
     if (mqttClient.connected()) {
-          // @todo check with Luuk to have 'createEvent' return the jsonString
-          char jsonString[100];
-          DynamicJsonDocument jsonObject = buildEvent(topic, value);
+          char jsonString[75];
+          buildEvent(topic, value, jsonString);
           
-          serializeJson(jsonObject, jsonString);
           mqttClient.publish(topic, jsonString);
     } else if (connectAndSubscribe()) {
         publishString(topic, value);
@@ -339,21 +330,26 @@ void publishFloat(char* topic, float value)
 }
 
 /**
- *  Publish an event in JSON format, makes it possible to send more information at once.
+ *  Create JSON event data object, this makes it possible to send more information at once.
  * 
  *  @param char* topic
  *  @param char* value
  */
-DynamicJsonDocument buildEvent(char* topic, char* value)
+void buildEvent(char* topic, char* value, char* jsonString)
 {
-    DynamicJsonDocument jsonObject(100);
+    const char *startTag = "{";
+    const char *topicTag = "\"topic\":\"";
+    const char *valueTag = "\",\"value\":\"";
+    const char *endTag = "\"}";
 
-    // https://www.circuitbasics.com/using-an-arduino-ethernet-shield-for-timekeeping/
-    //jsonObject["timestamp"] = now();
-    jsonObject["topic"] = topic;
-    jsonObject["value"] = trim(value);
-    
-    return jsonObject;
+    strcpy(jsonString, startTag);
+    strcat(jsonString, topicTag);
+    strcat(jsonString, topic);
+    strcat(jsonString, valueTag);
+    strcat(jsonString, value);
+    strcat(jsonString, endTag);
+
+    return jsonString;
 }
 
 /**
