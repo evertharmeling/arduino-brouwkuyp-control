@@ -303,10 +303,9 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
 void publishString(char* topic, char* value) 
 {
     if (mqttClient.connected()) {
-          char jsonString[75];
-          buildEvent(topic, value, jsonString);
-          
+          char* jsonString = buildEvent(topic, value);
           mqttClient.publish(topic, jsonString);
+          free(jsonString);
     } else if (connectAndSubscribe()) {
         publishString(topic, value);
     }
@@ -335,21 +334,22 @@ void publishFloat(char* topic, float value)
  *  @param char* topic
  *  @param char* value
  */
-void buildEvent(char* topic, char* value, char* jsonString)
+char* buildEvent(char* topic, char* value)
 {
+    char * buff = (char *)malloc(75);
     const char *startTag = "{";
     const char *topicTag = "\"topic\":\"";
     const char *valueTag = "\",\"value\":\"";
     const char *endTag = "\"}";
 
-    strcpy(jsonString, startTag);
-    strcat(jsonString, topicTag);
-    strcat(jsonString, topic);
-    strcat(jsonString, valueTag);
-    strcat(jsonString, value);
-    strcat(jsonString, endTag);
+    strcpy(buff, startTag);
+    strcat(buff, topicTag);
+    strcat(buff, topic);
+    strcat(buff, valueTag);
+    strcat(buff, value);
+    strcat(buff, endTag);
 
-    return jsonString;
+    return buff;
 }
 
 /**
