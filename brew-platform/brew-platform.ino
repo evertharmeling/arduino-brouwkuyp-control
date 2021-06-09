@@ -1,6 +1,7 @@
 /**
    Brouwkuyp Arduino Brew Software
-   @author Evert Harmeling <evertharmeling@gmail.com>
+   @author Evert Harmeling <evert@biertjevandesaeck.nl>
+   @author Luuk van Hal <luuk@biertjevandesaeck.nl>
 */
 
 /**
@@ -108,7 +109,7 @@ float setTempMLT       = NULL;
 float setTempHLT       = NULL;
 boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
-char* pumpMode         = PUMP_MODE_AUTOMATIC;
+char* pumpMode         = PUMP_MODE_MANUAL;
 char* pumpState        = PUMP_STATE_OFF;
 // hacky workaround to work with the RELAIS_PIN number as array index
 // as the highest PIN number is currently 9, we create an array with 10 items and initialize it with 'off' (false) state
@@ -117,7 +118,7 @@ int relaisStates[10]    = {
 };
 
 /**
-    Callback function to parse MQTT events
+  Callback function to parse MQTT events
 */
 void callback(char* topic, byte* payload, unsigned int length)
 {
@@ -129,25 +130,20 @@ void callback(char* topic, byte* payload, unsigned int length)
     setTempMLT = atof(value);
   } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
     if (strcmp(value, PUMP_STATE_ON) == 0) {
-//      Serial.println("Topic: PUMP set STATE; mode: > MANUAL <, state: > ON <");
       pumpMode = PUMP_MODE_MANUAL;
       pumpState = PUMP_STATE_ON;
       switchRelais(PIN_RELAIS_PUMP, true);
     } else if (strcmp(value, PUMP_STATE_OFF) == 0) {
-//      Serial.println("Topic: PUMP set STATE; mode: > MANUAL <, state: > OFF <");
       pumpMode = PUMP_MODE_MANUAL;
       pumpState = PUMP_STATE_OFF;
       switchRelais(PIN_RELAIS_PUMP, false);
     } else {
-//      Serial.println("Topic: PUMP set STATE; mode: > AUTOMATIC < (implicit)");
       pumpMode = PUMP_MODE_AUTOMATIC;
     }
   } else if (strcmp(topic, TOPIC_PUMP_SET_MODE) == 0) {
     if (strcmp(value, PUMP_MODE_AUTOMATIC) == 0) {
-//      Serial.println("Topic: PUMP set mode > AUTOMATIC <");
       pumpMode = PUMP_MODE_AUTOMATIC;
     } else if (strcmp(value, PUMP_MODE_MANUAL) == 0) {
-//      Serial.println("Topic: PUMP set mode > MANUAL <");
       pumpMode = PUMP_MODE_MANUAL;
     }
   } else {
@@ -164,6 +160,7 @@ void setup()
 {
   Serial.begin(9600);
   Ethernet.begin(mac, ip);
+  
   // give the Ethernet shield 200 milliseconds to initialize...
   delay(200);
 
@@ -201,9 +198,9 @@ void loop()
 }
 
 /**
-    Handles the set variables, gotten from MQTT messages
+  Handles the set variables, gotten from MQTT messages
 
-    Possible optimization for HLT temp, knowing the max MLT temp (last step), so HLT does not have to get warmer
+  Possible optimization for HLT temp, knowing the max MLT temp (last step), so HLT does not have to get warmer
 */
 void handleRecipe()
 {
@@ -244,7 +241,7 @@ void handleRecipe()
 }
 
 /**
-    Publishes all the data
+  Publishes all the data
 */
 void publishData()
 {
@@ -265,7 +262,7 @@ void publishData()
  *****************/
 
 /**
-    Connects to MQTT server and subscribes to topic
+  Connects to MQTT server and subscribes to topic
 */
 boolean connectAndSubscribe()
 {
@@ -282,11 +279,11 @@ boolean connectAndSubscribe()
 }
 
 /**
-    Uniform way of handling the hysterese check, to prevent switching the relais on / off too fast
+  Uniform way of handling the hysterese check, to prevent switching the relais on / off too fast
 
-    @param float currTemp   Current temperature value
-    @param float setTemp    Desired temperature
-    @param boolean heating  Boolean to hold current heating status
+  @param float currTemp   Current temperature value
+  @param float setTemp    Desired temperature
+  @param boolean heating  Boolean to hold current heating status
 */
 boolean handleHysterese(float currTemp, float setTemp, boolean heating)
 {
@@ -304,10 +301,10 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
 }
 
 /**
-    Proxy method to publish a value to a topic in MQTT
+  Proxy method to publish a value to a topic in MQTT
 
-    @param char* topic
-    @param char* value
+  @param char* topic
+  @param char* value
 */
 void publishString(char* topic, char* value)
 {
@@ -321,10 +318,10 @@ void publishString(char* topic, char* value)
 }
 
 /**
-    Publishes a float to MQTT client
+  Publishes a float to MQTT client
 
-    @param char* topic
-    @param float value
+  @param char* topic
+  @param float value
 */
 void publishFloat(char* topic, float value)
 {
@@ -338,10 +335,10 @@ void publishFloat(char* topic, float value)
 }
 
 /**
-    Create JSON event data object, this makes it possible to send more information at once.
+  Create JSON event data object, this makes it possible to send more information at once.
 
-    @param char* topic
-    @param char* value
+  @param char* topic
+  @param char* value
 */
 char* buildEvent(char* topic, char* value)
 {
@@ -355,17 +352,17 @@ char* buildEvent(char* topic, char* value)
   strcat(buff, topicTag);
   strcat(buff, topic);
   strcat(buff, valueTag);
-  strcat(buff, value);
+  strcat(buff, trim(value));
   strcat(buff, endTag);
 
   return buff;
 }
 
 /**
-    Converts float to char
+  Converts float to char
 
-    @param float temp
-    @param char **charTemp
+  @param float temp
+  @param char **charTemp
 */
 void convertTemperature(float temp, char **charTemp)
 {
@@ -374,15 +371,13 @@ void convertTemperature(float temp, char **charTemp)
 }
 
 /**
-    Switch relais on (true) / off (false)
+  Switch relais on (true) / off (false)
 
-    @param int relais     The pin of the relais
-    @param boolean state  true / false
+  @param int relais     The pin of the relais
+  @param boolean state  true / false
 */
 void switchRelais(int relaisPin, boolean state)
-{
-  //Serial.println("Switch: " + String(relaisPin) + ", to state: " + String(state) + ", current state: " + String(relaisStates[relaisPin]));
-  
+{ 
   if (state && !relaisStates[relaisPin]) {
     Serial.println("  Relais: " + String(relaisPin) + "; turned > ON <");
     digitalWrite(relaisPin, LOW);
@@ -397,9 +392,9 @@ void switchRelais(int relaisPin, boolean state)
 }
 
 /**
-    Trims char array
+  Trims char array
 
-    @param char* value
+  @param char* value
 */
 char* trim(char* value)
 {
