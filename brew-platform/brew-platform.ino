@@ -22,20 +22,20 @@
 // Ethernet shield mac address
 uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
 // RabbitMQ IP address
-uint8_t server[] =                  { 192, 168, 10, 102 };
+uint8_t server[] =                  { 192, 168, 1, 162 };
 // Static client IP, should be in the same subnet as the server IP
 // Linksys Router is set up to give out IP's via DHCP from 192.168.10.100 upwards
-uint8_t ip[]     =                  { 192, 168, 10, 20 };
+uint8_t ip[]     =                  { 192, 168, 1, 201 };
 
 #define SENSOR_ADDRESS_LENGTH       8
 #define SENSOR_RESOLUTION           9
 
 // Temperature probe addresses
-uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7
+uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 232, 3, 37, 2, 8, 0, 245 };    // 10e80325280f5
 uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };    // 104bbc4d2805c
 uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };    // 103d1325280a6
 uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
-uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };    // 10e80325280f5
+uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7c - broken... (old HLT)
 
 // *************************************************************************** //
 // *** test purposes, use extra sensors to imitate original HLT + MLT sensors
@@ -181,7 +181,7 @@ void setup()
 }
 
 void loop()
-{
+{ 
   sensors.requestTemperatures();
 
   if (connectAndSubscribe()) {
