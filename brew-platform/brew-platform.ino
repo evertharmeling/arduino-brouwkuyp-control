@@ -22,7 +22,10 @@
 // Ethernet shield mac address
 uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
 // RabbitMQ IP address
-uint8_t server[] =                  { 192, 168, 1, 162 };
+  // At Forestroad brewery
+//uint8_t server[] =                  { 192, 168, 1, 162 };
+  // When connected to the Linksys WRT54G router
+uint8_t server[] =                  { 192, 168, 1, 102 };
 // Static client IP, should be in the same subnet as the server IP
 // Linksys Router is set up to give out IP's via DHCP from 192.168.10.100 upwards
 uint8_t ip[]     =                  { 192, 168, 1, 201 };
@@ -100,21 +103,21 @@ PubSubClient mqttClient(server, 1883, callback, ethClient);
 
 // Initiate variables
 elapsedMillis loopTime;
-elapsedMillis stepTime;
-float tempHLT          = NULL;
-float tempMLT          = NULL;
-float tempBLT          = NULL;
-float tempEXT          = NULL;
-float setTempMLT       = NULL;
-float setTempHLT       = NULL;
+float tempHLT          = 0.0;
+float tempMLT          = 0.0;
+float tempBLT          = 0.0;
+float tempEXT          = 0.0;
+float setTempMLT       = -1.0;
+float setTempHLT       = -1.0;
 boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
-char* pumpMode         = PUMP_MODE_MANUAL;
+char* pumpMode         = PUMP_MODE_AUTOMATIC;
 char* pumpState        = PUMP_STATE_OFF;
 // hacky workaround to work with the RELAIS_PIN number as array index
 // as the highest PIN number is currently 9, we create an array with 10 items and initialize it with 'off' (false) state
-int relaisStates[10]    = {
-  false, false, false, false, false, false, false, false, false, false
+// set initial states as is default by hardware
+boolean relaisStates[10]    = {
+  false, false, false, false, false, true, true, true, true, true
 };
 
 /**
@@ -140,12 +143,28 @@ void callback(char* topic, byte* payload, unsigned int length)
     } else {
       pumpMode = PUMP_MODE_AUTOMATIC;
     }
+    Serial.println("----------");
+    Serial.print("pump state: ");
+    Serial.println(topic);
+    Serial.print("value: ");
+    Serial.println(value);
+    Serial.print("current state: ");
+    Serial.println(pumpState);
+    Serial.println("----------");
   } else if (strcmp(topic, TOPIC_PUMP_SET_MODE) == 0) {
     if (strcmp(value, PUMP_MODE_AUTOMATIC) == 0) {
       pumpMode = PUMP_MODE_AUTOMATIC;
     } else if (strcmp(value, PUMP_MODE_MANUAL) == 0) {
       pumpMode = PUMP_MODE_MANUAL;
     }
+    Serial.println("----------");
+    Serial.print("pump mode: ");
+    Serial.println(topic);
+    Serial.print("value: ");
+    Serial.println(value);
+    Serial.print("current mode: ");
+    Serial.println(pumpMode);
+    Serial.println("----------");
   } else {
 //    Serial.println("----------");
 //    Serial.print("Unknown / not listening to topic: ");
@@ -177,6 +196,9 @@ void setup()
 
   // set initial relais state
   switchRelais(PIN_RELAIS_PUMP, false);
+  switchRelais(PIN_RELAIS_HLT_ONE, false);
+  switchRelais(PIN_RELAIS_HLT_TWO, false);
+  switchRelais(PIN_RELAIS_HLT_THREE, false);
   switchRelais(PIN_RELAIS_MLT, false);
 }
 
@@ -205,7 +227,7 @@ void loop()
 void handleRecipe()
 {
   // make sure we have a set temp for the MLT
-  if (setTempMLT != NULL) {
+  if (setTempMLT != -1.0) {
     setTempHLT = setTempMLT + HLT_MLT_HEATUP_DIFF;
 
     if (setTempHLT > MAX_HLT_TEMPERATURE) {
@@ -250,7 +272,12 @@ void publishData()
   publishFloat(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
 
   publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
+  Serial.print("current mode: ");
+  Serial.println(pumpMode);
+  
   publishString(TOPIC_PUMP_CURR_STATE, pumpState);
+  Serial.print("current state: ");
+  Serial.println(pumpState);
 
   // extra sensors for testing purposes
   publishFloat(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
@@ -291,6 +318,7 @@ boolean handleHysterese(float currTemp, float setTemp, boolean heating)
   float bottom = setTemp - HYSTERESE;
 
   if (currTemp >= bottom && currTemp <= top) {
+    // no-op
   } else if (currTemp < bottom) {
     heating = true;
   } else if (currTemp > top) {
@@ -325,13 +353,11 @@ void publishString(char* topic, char* value)
 */
 void publishFloat(char* topic, float value)
 {
-  if (value != NULL) {
-    char *charTemp = NULL;
+  char *charTemp = NULL;
 
-    convertTemperature(value, &charTemp);
-    publishString(topic, charTemp);
-    free(charTemp);
-  }
+  convertTemperature(value, &charTemp);
+  publishString(topic, charTemp);
+  free(charTemp);
 }
 
 /**
