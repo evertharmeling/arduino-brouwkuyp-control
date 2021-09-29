@@ -11,24 +11,25 @@
 
 #include "env.h"
 #include <SPI.h>
+#include <MQTT.h>
 #include <Wire.h>
 #include <OneWire.h>
 #include <Ethernet.h>
-#include <PubSubClient.h>
 #include <elapsedMillis.h>
 #include <DallasTemperature.h>
 
-// Network settings
-// Ethernet shield mac address
+// -- Network settings
+// -- Ethernet shield mac address
 uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-// RabbitMQ IP address
-  // At Forestroad brewery
-//uint8_t server[] =                  { 192, 168, 1, 162 };
-  // When connected to the Linksys WRT54G router
-uint8_t server[] =                  { 192, 168, 1, 102 };
 // Static client IP, should be in the same subnet as the server IP
 // Linksys Router is set up to give out IP's via DHCP from 192.168.10.100 upwards
 uint8_t ip[]     =                  { 192, 168, 1, 201 };
+
+// -- RabbitMQ server IP address
+// At Forestroad brewery
+//uint8_t server[] =                  { 192, 168, 1, 162 };
+// When connected to the Linksys WRT54G router
+uint8_t server[] =                  { 192, 168, 1, 102 };
 
 #define SENSOR_ADDRESS_LENGTH       8
 #define SENSOR_RESOLUTION           9
@@ -38,7 +39,7 @@ uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 232, 3, 37, 2, 8, 0, 245 };   
 uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };    // 104bbc4d2805c
 uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };    // 103d1325280a6
 uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
-uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7c - broken... (old HLT)
+//uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7c - broken... (old HLT)
 
 // *************************************************************************** //
 // *** test purposes, use extra sensors to imitate original HLT + MLT sensors
@@ -91,15 +92,14 @@ uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };
 #define MAX_HLT_TEMPERATURE         80    // degrees celsius
 #define HLT_MLT_HEATUP_DIFF         15    // degrees celsius
 #define MLT_HEATUP_DIFF             1     // degrees celsius
-
-void callback(char* topic, byte* payload, unsigned int length);
+#define VALUE_INVALID_TEMPERATURE   -127.00
 
 // Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(PIN_SENSOR_TEMPERATURE);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
 EthernetClient ethClient;
-PubSubClient mqttClient(server, 1883, callback, ethClient);
+MQTTClient mqttClient;
 
 // Initiate variables
 elapsedMillis loopTime;
@@ -113,81 +113,30 @@ boolean heatUpHLT      = false;
 boolean heatUpMLT      = false;
 char* pumpMode         = PUMP_MODE_AUTOMATIC;
 char* pumpState        = PUMP_STATE_OFF;
-// hacky workaround to work with the RELAIS_PIN number as array index
-// as the highest PIN number is currently 9, we create an array with 10 items and initialize it with 'off' (false) state
-// set initial states as is default by hardware
+
+/**
+  hacky workaround to work with the RELAIS_PIN number as array index
+  as the highest PIN number is currently 9, we create an array with 10 items and initialize it with 'off' (false) state
+  set initial states as is default by hardware
+**/
 boolean relaisStates[10]    = {
   false, false, false, false, false, true, true, true, true, true
 };
 
-/**
-  Callback function to parse MQTT events
-*/
-void callback(char* topic, byte* payload, unsigned int length)
-{
-  char value[length + 1];
-  snprintf(value, length + 1, "%s", payload);
-
-  if (strcmp(topic, TOPIC_MLT_SET_TEMP) == 0) {
-    Serial.println("Topic: MLT set temperature; > " + String(value) + "°C <");
-    setTempMLT = atof(value);
-  } else if (strcmp(topic, TOPIC_PUMP_SET_STATE) == 0) {
-    if (strcmp(value, PUMP_STATE_ON) == 0) {
-      pumpMode = PUMP_MODE_MANUAL;
-      pumpState = PUMP_STATE_ON;
-      switchRelais(PIN_RELAIS_PUMP, true);
-    } else if (strcmp(value, PUMP_STATE_OFF) == 0) {
-      pumpMode = PUMP_MODE_MANUAL;
-      pumpState = PUMP_STATE_OFF;
-      switchRelais(PIN_RELAIS_PUMP, false);
-    } else {
-      pumpMode = PUMP_MODE_AUTOMATIC;
-    }
-    Serial.println("----------");
-    Serial.print("pump state: ");
-    Serial.println(topic);
-    Serial.print("value: ");
-    Serial.println(value);
-    Serial.print("current state: ");
-    Serial.println(pumpState);
-    Serial.println("----------");
-  } else if (strcmp(topic, TOPIC_PUMP_SET_MODE) == 0) {
-    if (strcmp(value, PUMP_MODE_AUTOMATIC) == 0) {
-      pumpMode = PUMP_MODE_AUTOMATIC;
-    } else if (strcmp(value, PUMP_MODE_MANUAL) == 0) {
-      pumpMode = PUMP_MODE_MANUAL;
-    }
-    Serial.println("----------");
-    Serial.print("pump mode: ");
-    Serial.println(topic);
-    Serial.print("value: ");
-    Serial.println(value);
-    Serial.print("current mode: ");
-    Serial.println(pumpMode);
-    Serial.println("----------");
-  } else {
-//    Serial.println("----------");
-//    Serial.print("Unknown / not listening to topic: ");
-//    Serial.println(topic);
-//    Serial.print("value: ");
-//    Serial.println(value);
-//    Serial.println("----------");
-  }
-}
-
 void setup()
 {
-  Serial.begin(9600);
+  Serial.begin(115200);
   Ethernet.begin(mac, ip);
-  
-  // give the Ethernet shield 200 milliseconds to initialize...
-  delay(200);
+
+  mqttClient.begin(server, ethClient);
+  mqttClient.onMessage(messageReceived);
 
   sensors.begin();
   Serial.print(sensors.getDeviceCount(), DEC);
   Serial.println(" sensors found");
+  Serial.println(""); // for display purposes
 
-  // initialize Relais
+  // initialize the relais switches
   pinMode(PIN_RELAIS_HLT_ONE,   OUTPUT);
   pinMode(PIN_RELAIS_HLT_TWO,   OUTPUT);
   pinMode(PIN_RELAIS_HLT_THREE, OUTPUT);
@@ -204,6 +153,8 @@ void setup()
 
 void loop()
 { 
+  mqttClient.loop();
+  
   sensors.requestTemperatures();
 
   if (connectAndSubscribe()) {
@@ -215,8 +166,45 @@ void loop()
       loopTime = 0;
     }
   }
+}
 
-  mqttClient.loop();
+/**
+  Callback function to parse the MQTT events
+   
+  @todo optimize to not receive the send messages (looks like all that is sent (curr_temp) is also received again)
+ */
+void messageReceived(String &topic, String &payload) {
+  if (topic == TOPIC_MLT_SET_TEMP) {
+    setTempMLT = payload.toFloat();
+    Serial.print("MLT set temp received: ");
+    Serial.println(setTempMLT);
+  } else if (topic == TOPIC_PUMP_SET_STATE && pumpMode == PUMP_MODE_MANUAL) {
+    if (payload == PUMP_STATE_ON) {
+      pumpState = PUMP_STATE_ON;
+      switchRelais(PIN_RELAIS_PUMP, true);
+    } else if (payload == PUMP_STATE_OFF) {
+      pumpState = PUMP_STATE_OFF;
+      switchRelais(PIN_RELAIS_PUMP, false);
+    }
+    Serial.print("Switched pump state to: ");
+    Serial.println(pumpState);
+  } else if (topic == TOPIC_PUMP_SET_MODE) {
+    if (payload == PUMP_MODE_AUTOMATIC) {
+      pumpMode = PUMP_MODE_AUTOMATIC;
+    } else if (payload == PUMP_MODE_MANUAL) {
+      pumpMode = PUMP_MODE_MANUAL;
+    }
+    Serial.print("Switched pump mode to: ");
+    Serial.println(pumpMode);
+  } else {
+    // no-op - debug purposes
+//    Serial.println("Incoming message");
+//    Serial.print("  Topic: ");
+//    Serial.println(topic);
+//    Serial.print("  Value: ");
+//    Serial.println(payload);
+//    Serial.println("");
+  }
 }
 
 /**
@@ -267,21 +255,16 @@ void handleRecipe()
 */
 void publishData()
 {
-  publishFloat(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));
-  publishFloat(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
-  publishFloat(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
+  publishTemperature(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));  
+  publishTemperature(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
+  publishTemperature(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
 
   publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
-  Serial.print("current mode: ");
-  Serial.println(pumpMode);
-  
   publishString(TOPIC_PUMP_CURR_STATE, pumpState);
-  Serial.print("current state: ");
-  Serial.println(pumpState);
 
   // extra sensors for testing purposes
-  publishFloat(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
-  publishFloat(TOPIC_EXT2_CURR_TEMP, sensors.getTempC(sensorEXT2));
+  publishTemperature(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
+//  publishTemperature(TOPIC_EXT2_CURR_TEMP, sensors.getTempC(sensorEXT2));
 }
 
 /******************
@@ -295,14 +278,20 @@ boolean connectAndSubscribe()
 {
   if (!mqttClient.connected()) {
     if (mqttClient.connect(MQTT_CLIENT, MQTT_USER, MQTT_PASS)) {
-      mqttClient.subscribe("brewery/#");
+      mqttClient.subscribe("brewery/forestroad/#");
       Serial.println("Succesfully subscribed to MQTT server!");
+      Serial.println(""); // for display purposes
 
       return true;
-    } else {
-      Serial.println("Unable to connect to MQTT server!");
-    }
+    } 
+
+    Serial.println("Unable to connect to MQTT server!");
+    Serial.println(""); // for display purposes
+
+    return false;
   }
+
+  return true;
 }
 
 /**
@@ -351,17 +340,20 @@ void publishString(char* topic, char* value)
   @param char* topic
   @param float value
 */
-void publishFloat(char* topic, float value)
+void publishTemperature(char* topic, float value)
 {
-  char *charTemp = NULL;
-
-  convertTemperature(value, &charTemp);
-  publishString(topic, charTemp);
-  free(charTemp);
+  // only send valid temperatures (to reduce the amount of messages sent)
+  if (value != VALUE_INVALID_TEMPERATURE) {
+    char *charTemp = NULL;
+  
+    convertTemperature(value, &charTemp);
+    publishString(topic, charTemp);
+    free(charTemp);
+  }
 }
 
 /**
-  Create JSON event data object, this makes it possible to send more information at once.
+  Create JSON event data object, this makes it possible to send more information at once (topic and value).
 
   @param char* topic
   @param char* value
