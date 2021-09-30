@@ -98,6 +98,7 @@ uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };  
 OneWire oneWire(PIN_SENSOR_TEMPERATURE);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
+
 EthernetClient ethClient;
 MQTTClient mqttClient;
 
@@ -119,8 +120,13 @@ char* pumpState        = PUMP_STATE_OFF;
   as the highest PIN number is currently 9, we create an array with 10 items and initialize it with 'off' (false) state
   set initial states as is default by hardware
 **/
-boolean relaisStates[10]    = {
+boolean relaisStates[10] = {
   false, false, false, false, false, true, true, true, true, true
+};
+
+char* relaisNames[10] = {
+  "undefined", "undefined", "undefined", "undefined", "undefined",
+  "HLT HP 1", "HLT HP 2", "HLT HP 3", "Pump    ", "MLT HP  "
 };
 
 void setup()
@@ -149,6 +155,11 @@ void setup()
   switchRelais(PIN_RELAIS_HLT_TWO, false);
   switchRelais(PIN_RELAIS_HLT_THREE, false);
   switchRelais(PIN_RELAIS_MLT, false);
+
+  Serial.println(""); // for display purposes
+  Serial.println("  Pump Mode  : > " + String(pumpMode) + " <");
+  Serial.println("  Pump State : > " + String(pumpState) + " <");
+  Serial.println(""); // for display purposes
 }
 
 void loop()
@@ -278,8 +289,9 @@ boolean connectAndSubscribe()
 {
   if (!mqttClient.connected()) {
     if (mqttClient.connect(MQTT_CLIENT, MQTT_USER, MQTT_PASS)) {
+      // specifically listen to messages for this client
       mqttClient.subscribe("brewery/forestroad/#");
-      Serial.println("Succesfully subscribed to MQTT server!");
+      Serial.println("Succesfully subscribed to MQTT server. Ready to brew!");
       Serial.println(""); // for display purposes
 
       return true;
@@ -397,15 +409,15 @@ void convertTemperature(float temp, char **charTemp)
 void switchRelais(int relaisPin, boolean state)
 { 
   if (state && !relaisStates[relaisPin]) {
-    Serial.println("  Relais: " + String(relaisPin) + "; turned > ON <");
+    Serial.println("  " + String(relaisNames[relaisPin]) + "   : turned > ON <");
     digitalWrite(relaisPin, LOW);
     relaisStates[relaisPin] = 1;
   } else if (!state && relaisStates[relaisPin]) {
-    Serial.println("  Relais: " + String(relaisPin) + "; turned > OFF <");
+    Serial.println("  " + String(relaisNames[relaisPin]) + "   : turned > OFF <");
     digitalWrite(relaisPin, HIGH);
     relaisStates[relaisPin] = 0;
   } else {
-    //Serial.println("  Relais: " + String(relaisPin) + "; no change needed");
+//    Serial.println("  " + String(relaisNames[relaisPin]) + "   : no change needed");
   }
 }
 
