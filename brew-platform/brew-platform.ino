@@ -1,12 +1,7 @@
 /**
-   Brouwkuyp Arduino Brew Software
+   De Saeck / Brouwkuyp Arduino Brew Platform
    @author Evert Harmeling <evert@biertjevandesaeck.nl>
    @author Luuk van Hal <luuk@biertjevandesaeck.nl>
-*/
-
-/**
-   @todo
-     - ...
 */
 
 #include "env.h"
@@ -50,8 +45,6 @@ uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };  
 
 // Should be a unique identifier to be able to identify the client within the whole infrastructure
 #define MQTT_CLIENT                 "bp-fr-arduino-client"
-#define MQTT_USER                   SECRET_MQTT_USER
-#define MQTT_PASS                   SECRET_MQTT_PASS
 
 // Subscribe topics
 // topic format: "brewery/<brewery_name>/<unit>/<action>"
@@ -102,8 +95,9 @@ DallasTemperature sensors(&oneWire);
 EthernetClient ethClient;
 MQTTClient mqttClient;
 
-// Initiate variables
 elapsedMillis loopTime;
+
+// Initiate variables
 float tempHLT          = 0.0;
 float tempMLT          = 0.0;
 float tempBLT          = 0.0;
@@ -124,14 +118,14 @@ boolean relaisStates[10] = {
   false, false, false, false, false, true, true, true, true, true
 };
 
-char* relaisNames[10] = {
-  "undefined", "undefined", "undefined", "undefined", "undefined",
-  "HLT HP 1", "HLT HP 2", "HLT HP 3", "Pump    ", "MLT HP  "
-};
-
 void setup()
 {
   Serial.begin(115200);
+
+  if (!Serial) {
+    ; // wait for serial port to connect...
+  }
+  
   Ethernet.begin(mac, ip);
 
   mqttClient.begin(server, ethClient);
@@ -155,11 +149,6 @@ void setup()
   switchRelais(PIN_RELAIS_HLT_TWO, false);
   switchRelais(PIN_RELAIS_HLT_THREE, false);
   switchRelais(PIN_RELAIS_MLT, false);
-
-  Serial.println(""); // for display purposes
-  Serial.println("  Pump Mode  : > " + String(pumpMode) + " <");
-  Serial.println("  Pump State : > " + String(pumpState) + " <");
-  Serial.println(""); // for display purposes
 }
 
 void loop()
@@ -209,10 +198,9 @@ void messageReceived(String &topic, String &payload) {
     Serial.println(pumpMode);
   } else {
     // no-op - debug purposes
-//    Serial.println("Incoming message");
 //    Serial.print("  Topic: ");
 //    Serial.println(topic);
-//    Serial.print("  Value: ");
+//    Serial.println("  Value: ");
 //    Serial.println(payload);
 //    Serial.println("");
   }
@@ -265,7 +253,7 @@ void handleRecipe()
   Publishes all the data
 */
 void publishData()
-{
+{ 
   publishTemperature(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));  
   publishTemperature(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
   publishTemperature(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
@@ -288,7 +276,7 @@ void publishData()
 boolean connectAndSubscribe()
 {
   if (!mqttClient.connected()) {
-    if (mqttClient.connect(MQTT_CLIENT, MQTT_USER, MQTT_PASS)) {
+    if (mqttClient.connect(MQTT_CLIENT, SECRET_MQTT_USER, SECRET_MQTT_PASS)) {
       // specifically listen to messages for this client
       mqttClient.subscribe("brewery/forestroad/#");
       Serial.println("Succesfully subscribed to MQTT server. Ready to brew!");
@@ -409,15 +397,15 @@ void convertTemperature(float temp, char **charTemp)
 void switchRelais(int relaisPin, boolean state)
 { 
   if (state && !relaisStates[relaisPin]) {
-    Serial.println("  " + String(relaisNames[relaisPin]) + "   : turned > ON <");
+    Serial.println("  " + String(relaisPin) + "   : turned > ON <");
     digitalWrite(relaisPin, LOW);
     relaisStates[relaisPin] = 1;
   } else if (!state && relaisStates[relaisPin]) {
-    Serial.println("  " + String(relaisNames[relaisPin]) + "   : turned > OFF <");
+    Serial.println("  " + String(relaisPin) + "   : turned > OFF <");
     digitalWrite(relaisPin, HIGH);
     relaisStates[relaisPin] = 0;
   } else {
-//    Serial.println("  " + String(relaisNames[relaisPin]) + "   : no change needed");
+//    Serial.println("  " + String(relaisPin) + "   : no change needed");
   }
 }
 
