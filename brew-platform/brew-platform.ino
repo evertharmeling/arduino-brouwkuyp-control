@@ -22,18 +22,18 @@ uint8_t ip[]     =                  { 192, 168, 1, 201 };
 
 // -- RabbitMQ server IP address
 // At Forestroad brewery
-//uint8_t server[] =                  { 192, 168, 1, 162 };
+uint8_t server[] =                  { 192, 168, 1, 162 };
 // When connected to the Linksys WRT54G router
-uint8_t server[] =                  { 192, 168, 1, 102 };
+// uint8_t server[] =                  { 192, 168, 1, 102 };
 
 #define SENSOR_ADDRESS_LENGTH       8
 #define SENSOR_RESOLUTION           9
 
 // Temperature probe addresses
 uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 232, 3, 37, 2, 8, 0, 245 };    // 10e80325280f5
-uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };    // 104bbc4d2805c
+uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
 uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };    // 103d1325280a6
-uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
+uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };    // 104bbc4d2805c - brokenish... (old MLT, keeps sending 85 degrees)
 //uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7c - broken... (old HLT)
 
 // *************************************************************************** //
@@ -79,11 +79,11 @@ uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };  
 
 // Config settings
 #define LOOP_INTERVAL               1000  // milliseconds
-#define HYSTERESE                   0.5   // degrees celsius
+#define HYSTERESE                   0.2   // degrees celsius
 #define PRECISION                   2     // digits behind comma
 #define FLOAT_LENGTH                6     // bytes
 #define MAX_HLT_TEMPERATURE         80    // degrees celsius
-#define HLT_MLT_HEATUP_DIFF         15    // degrees celsius
+#define HLT_MLT_HEATUP_DIFF         20    // degrees celsius
 #define MLT_HEATUP_DIFF             1     // degrees celsius
 #define VALUE_INVALID_TEMPERATURE   -127.00
 
