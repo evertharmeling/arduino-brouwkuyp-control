@@ -403,11 +403,11 @@ void convertTemperature(float temp, char **charTemp)
 void switchRelais(int relaisPin, boolean state)
 { 
   if (state && !relaisStates[relaisPin]) {
-    Serial.println("  " + String(relaisPin) + "   : turned > ON <");
+    // Serial.println("  " + String(relaisPin) + "   : turned > ON <");
     digitalWrite(relaisPin, LOW);
     relaisStates[relaisPin] = 1;
   } else if (!state && relaisStates[relaisPin]) {
-    Serial.println("  " + String(relaisPin) + "   : turned > OFF <");
+    // Serial.println("  " + String(relaisPin) + "   : turned > OFF <");
     digitalWrite(relaisPin, HIGH);
     relaisStates[relaisPin] = 0;
   } else {
