@@ -22,7 +22,7 @@ uint8_t ip[]     =                  { 192, 168, 1, 201 };
 
 // -- RabbitMQ server IP address
 // At Forestroad brewery
-uint8_t server[] =                  { 192, 168, 1, 162 };
+uint8_t server[] =                  { 192, 168, 1, 163 };
 // When connected to the Linksys WRT54G router
 // uint8_t server[] =                  { 192, 168, 1, 102 };
 
@@ -49,6 +49,7 @@ uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };   
 // Subscribe topics
 // topic format: "brewery/<brewery_name>/<unit>/<action>"
 #define TOPIC_MLT_SET_TEMP          "brewery/forestroad/mlt/set_temp"
+#define TOPIC_HLT_SET_TEMP          "brewery/forestroad/hlt/set_temp"
 #define TOPIC_PUMP_SET_MODE         "brewery/forestroad/pump/set_mode"
 #define TOPIC_PUMP_SET_STATE        "brewery/forestroad/pump/set_state"
 
@@ -79,11 +80,11 @@ uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };   
 
 // Config settings
 #define LOOP_INTERVAL               1000  // milliseconds
-#define HYSTERESE                   0.2   // degrees celsius
+#define HYSTERESE                   0.3   // degrees celsius
 #define PRECISION                   2     // digits behind comma
 #define FLOAT_LENGTH                6     // bytes
-#define MAX_HLT_TEMPERATURE         80    // degrees celsius
-#define HLT_MLT_HEATUP_DIFF         20    // degrees celsius
+#define MAX_HLT_TEMPERATURE         90    // degrees celsius
+#define HLT_MLT_HEATUP_DIFF         30    // degrees celsius
 #define MLT_HEATUP_DIFF             1     // degrees celsius
 #define VALUE_INVALID_TEMPERATURE   -127.00
 
@@ -132,9 +133,9 @@ void setup()
   mqttClient.onMessage(messageReceived);
 
   sensors.begin();
-  Serial.print(sensors.getDeviceCount(), DEC);
-  Serial.println(" sensors found");
-  Serial.println(""); // for display purposes
+  // Serial.print(sensors.getDeviceCount(), DEC);
+  // Serial.println(" sensors found");
+  // Serial.println(""); // for display purposes
 
   // initialize the relais switches
   pinMode(PIN_RELAIS_HLT_ONE,   OUTPUT);
@@ -171,13 +172,13 @@ void loop()
 /**
   Callback function to parse the MQTT events
    
-  @todo optimize to not receive the send messages (looks like all that is sent (curr_temp) is also received again)
+  @todo optimize to not receive the sent messages (looks like all that is sent (curr_temp) is also received again)
  */
 void messageReceived(String &topic, String &payload) {
   if (topic == TOPIC_MLT_SET_TEMP) {
     setTempMLT = payload.toFloat();
-    Serial.print("MLT set temp received: ");
-    Serial.println(setTempMLT);
+    // Serial.print("MLT set temp received: ");
+    // Serial.println(setTempMLT);
   } else if (topic == TOPIC_PUMP_SET_STATE && pumpMode == PUMP_MODE_MANUAL) {
     if (payload == PUMP_STATE_ON) {
       pumpState = PUMP_STATE_ON;
@@ -186,16 +187,16 @@ void messageReceived(String &topic, String &payload) {
       pumpState = PUMP_STATE_OFF;
       switchRelais(PIN_RELAIS_PUMP, false);
     }
-    Serial.print("Switched pump state to: ");
-    Serial.println(pumpState);
+    // Serial.print("Switched pump state to: ");
+    // Serial.println(pumpState);
   } else if (topic == TOPIC_PUMP_SET_MODE) {
     if (payload == PUMP_MODE_AUTOMATIC) {
       pumpMode = PUMP_MODE_AUTOMATIC;
     } else if (payload == PUMP_MODE_MANUAL) {
       pumpMode = PUMP_MODE_MANUAL;
     }
-    Serial.print("Switched pump mode to: ");
-    Serial.println(pumpMode);
+    // Serial.print("Switched pump mode to: ");
+    // Serial.println(pumpMode);
   } else {
     // no-op - debug purposes
 //    Serial.print("  Topic: ");
@@ -254,15 +255,18 @@ void handleRecipe()
 */
 void publishData()
 { 
-  publishTemperature(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));  
+  publishTemperature(TOPIC_MLT_CURR_TEMP, sensors.getTempC(sensorMLT));
   publishTemperature(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
   publishTemperature(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
+
+  publishTemperature(TOPIC_MLT_SET_TEMP, setTempMLT);
+  publishTemperature(TOPIC_HLT_SET_TEMP, setTempHLT);
 
   publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
   publishString(TOPIC_PUMP_CURR_STATE, pumpState);
 
   // extra sensors for testing purposes
-  publishTemperature(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
+// publishTemperature(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
 //  publishTemperature(TOPIC_EXT2_CURR_TEMP, sensors.getTempC(sensorEXT2));
 }
 
@@ -354,6 +358,8 @@ void publishTemperature(char* topic, float value)
 
 /**
   Create JSON event data object, this makes it possible to send more information at once (topic and value).
+
+  @todo include datetime
 
   @param char* topic
   @param char* value
