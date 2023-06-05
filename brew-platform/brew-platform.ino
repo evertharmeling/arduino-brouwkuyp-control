@@ -175,10 +175,13 @@ void loop()
   @todo optimize to not receive the sent messages (looks like all that is sent (curr_temp) is also received again)
  */
 void messageReceived(String &topic, String &payload) {
+  //Serial.println(topic);
+  //Serial.println(payload);
+
   if (topic == TOPIC_MLT_SET_TEMP) {
     setTempMLT = payload.toFloat();
-    // Serial.print("MLT set temp received: ");
-    // Serial.println(setTempMLT);
+    //Serial.print("MLT set temp received: ");
+    //Serial.println(setTempMLT);
   } else if (topic == TOPIC_PUMP_SET_STATE && pumpMode == PUMP_MODE_MANUAL) {
     if (payload == PUMP_STATE_ON) {
       pumpState = PUMP_STATE_ON;
@@ -259,8 +262,8 @@ void publishData()
   publishTemperature(TOPIC_HLT_CURR_TEMP, sensors.getTempC(sensorHLT));
   publishTemperature(TOPIC_BLT_CURR_TEMP, sensors.getTempC(sensorBLT));
 
-  publishTemperature(TOPIC_MLT_SET_TEMP, setTempMLT);
-  publishTemperature(TOPIC_HLT_SET_TEMP, setTempHLT);
+  //publishTemperature(TOPIC_MLT_SET_TEMP, setTempMLT);
+  //publishTemperature(TOPIC_HLT_SET_TEMP, setTempHLT);
 
   publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
   publishString(TOPIC_PUMP_CURR_STATE, pumpState);
