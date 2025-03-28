@@ -45,11 +45,12 @@ you may write to this log.
 
 #### Libraries
 The following libraries are need to be installed (via `Tools > Manage libraries...`:
+- **SPI** (v1.2.4)
 - **DallasTemperature** (v3.9.0) [sensors]
-  - **OneWire** (v2.3.5)
-- **elapsedMillis** (v1.0.6) [timing]
-- **PubSubClient** (v2.8.0) [AMQT messages]
-- **ArduinoJson** (v6.17.2) [convert data to json in event]
+  - **OneWire** (v2.3.5) [sensor protocol]
+- **Ethernet** (v2.0.0) [ethernet connection] 
+- **MQTT** (v2.5.0) [MQTT messages]
+- **elapsedMillis** (v1.0.6) [loop timing]
 
 ### Variables
 
