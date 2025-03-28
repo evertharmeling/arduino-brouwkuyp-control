@@ -13,37 +13,47 @@
 #include <elapsedMillis.h>
 #include <DallasTemperature.h>
 
+#define SENSOR_ADDRESS_LENGTH       8
+
+// =========================================================================== //
+// CONFIG
+// =========================================================================== //
+
+// *************************************************************************** //
 // -- Network settings
+// *************************************************************************** //
 // -- Ethernet shield mac address
-uint8_t mac[]    =                  {  0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
-// Static client IP, should be in the same subnet as the server IP
+uint8_t mac[]    =                  { 0x90, 0xA2, 0xDA, 0x0F, 0x6D, 0x90 };
+// Static Arduino client IP, should be in the same subnet as the server IP
 // Linksys Router is set up to give out IP's via DHCP from 192.168.10.100 upwards
 uint8_t ip[]     =                  { 192, 168, 1, 201 };
+// -- RabbitMQ server IP address (at Forestroad brewery, Evert's notebook)
+uint8_t server[] =                  { 192, 168, 1, 162 };
+// *************************************************************************** //
 
-// -- RabbitMQ server IP address
-// At Forestroad brewery
-uint8_t server[] =                  { 192, 168, 1, 163 };
-// When connected to the Linksys WRT54G router
-// uint8_t server[] =                  { 192, 168, 1, 102 };
-
-#define SENSOR_ADDRESS_LENGTH       8
-#define SENSOR_RESOLUTION           9
-
+// *************************************************************************** //
 // Temperature probe addresses
+// *************************************************************************** //
 uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 232, 3, 37, 2, 8, 0, 245 };    // 10e80325280f5
-uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
-uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };    // 103d1325280a6
-uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };    // 104bbc4d2805c - brokenish... (old MLT, keeps sending 85 degrees)
+uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] =  { 16, 61, 19, 37, 2, 8, 0, 166 };    // 103d1325280a6
+uint8_t sensorBLT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
+//uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };  // 104bbc4d2805c - brokenish... (old MLT, keeps sending 85 degrees)
 //uint8_t sensorEXT2[SENSOR_ADDRESS_LENGTH] =  { 16, 186, 176, 76, 2, 8, 0, 183 };  // 10bab04c280b7c - broken... (old HLT)
-
-// *************************************************************************** //
-// *** test purposes, use extra sensors to imitate original HLT + MLT sensors
-//uint8_t sensorHLT[SENSOR_ADDRESS_LENGTH] =  { 16, 151, 228, 36, 2, 8, 0, 77 };   // 1097e4242804d
-//uint8_t sensorMLT[SENSOR_ADDRESS_LENGTH] = { 16, 232, 3, 37, 2, 8, 0, 245 };     // 10e80325280f5
-// *** above 2 lines should not be used in production environment!
 // *************************************************************************** //
 
-// Should be a unique identifier to be able to identify the client within the whole infrastructure
+// *************************************************************************** //
+// Sensor mapping (Ali Express sensors)
+// *************************************************************************** //
+// Sensor 1): { 40, 158, 147, 104, 88, 35, 11, 35 }
+// Sensor 2): { 40, 36, 89, 101, 88, 35, 11, 233 }
+// Sensor 3): { 40, 55, 195, 142, 88, 35, 11, 60 }
+// Sensor 4): { 40, 78, 84, 156, 88, 35, 11, 235 }
+// Sensor 5): { 40, 82, 255, 181, 156, 35, 11, 160 }
+// *************************************************************************** //
+
+// =========================================================================== //
+
+// Should be a unique identifier, to be able to identify the client within the whole infrastructure
 #define MQTT_CLIENT                 "bp-fr-arduino-client"
 
 // Subscribe topics
@@ -92,8 +102,9 @@ uint8_t sensorEXT[SENSOR_ADDRESS_LENGTH] =  { 16, 75, 188, 77, 2, 8, 0, 92 };   
 OneWire oneWire(PIN_SENSOR_TEMPERATURE);
 // Pass our oneWire reference to Dallas Temperature.
 DallasTemperature sensors(&oneWire);
-
+// Setup Ethernet board
 EthernetClient ethClient;
+// Setup MQTT client
 MQTTClient mqttClient;
 
 elapsedMillis loopTime;
@@ -127,15 +138,13 @@ void setup()
     ; // wait for serial port to connect...
   }
   
+  // initialize Ethernet connection and MQTT client
   Ethernet.begin(mac, ip);
-
   mqttClient.begin(server, ethClient);
   mqttClient.onMessage(messageReceived);
 
+  // initialize sensors
   sensors.begin();
-  // Serial.print(sensors.getDeviceCount(), DEC);
-  // Serial.println(" sensors found");
-  // Serial.println(""); // for display purposes
 
   // initialize the relais switches
   pinMode(PIN_RELAIS_HLT_ONE,   OUTPUT);
@@ -206,7 +215,7 @@ void messageReceived(String &topic, String &payload) {
 //    Serial.println(topic);
 //    Serial.println("  Value: ");
 //    Serial.println(payload);
-//    Serial.println("");
+//    Serial.println();
   }
 }
 
@@ -267,10 +276,6 @@ void publishData()
 
   publishString(TOPIC_PUMP_CURR_MODE, pumpMode);
   publishString(TOPIC_PUMP_CURR_STATE, pumpState);
-
-  // extra sensors for testing purposes
-// publishTemperature(TOPIC_EXT_CURR_TEMP, sensors.getTempC(sensorEXT));
-//  publishTemperature(TOPIC_EXT2_CURR_TEMP, sensors.getTempC(sensorEXT2));
 }
 
 /******************
@@ -287,13 +292,13 @@ boolean connectAndSubscribe()
       // specifically listen to messages for this client
       mqttClient.subscribe("brewery/forestroad/#");
       Serial.println("Succesfully subscribed to MQTT server. Ready to brew!");
-      Serial.println(""); // for display purposes
+      Serial.println(); // for display purposes
 
       return true;
     } 
 
     Serial.println("Unable to connect to MQTT server!");
-    Serial.println(""); // for display purposes
+    Serial.println(); // for display purposes
 
     return false;
   }
